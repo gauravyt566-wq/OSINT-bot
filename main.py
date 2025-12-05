@@ -58,13 +58,13 @@ WELCOME_VIDEO_FILE_ID = os.getenv("WELCOME_VIDEO_FILE_ID", "BAACAgUAAxkBAAIHnmjJ
 
 # --- 🛰️ API ENDPOINTS (EXISTING) ---
 
-PHONE_API_ENDPOINT = "https://shadow-x-osint.vercel.app/api?key=Shadow&type=mobile&term={num}"
-PAK_PHONE_API_ENDPOINT = "https://pak-num-info-eight.vercel.app/api/lookup?query={num}&pretty=1"
-AADHAAR_API_ENDPOINT = "https://dark-trace-networks.vercel.app/api?key=DarkTrace_Network&type=id_number&term={aadhar}"
+PHONE_API_ENDPOINT = "https://gauravapi.gauravyt492.workers.dev/?mobile={num}"
+PAK_PHONE_API_ENDPOINT = "https://pak-info.gauravyt566.workers.dev/?num={num}"
+AADHAAR_API_ENDPOINT = "https://aadhar.gauravyt492.workers.dev/?aadhar={aadhar}"
 FAMILY_INFO_API_ENDPOINT = "https://ration-info.vercel.app/fetch?key=paidchx&aadhaar={aadhaar}"
-VEHICLE_API_ENDPOINT = "https://vvvin-ng.vercel.app/lookup?rc={rc_number}" # Advanced Vehicle
-IFSC_API_ENDPOINT = "https://ifsc.razorpay.com/{ifsc}"
-IP_API_ENDPOINT = "http://ip-api.com/json/{ip}"
+VEHICLE_API_ENDPOINT = "https://challan-api.gauravyt566.workers.dev/?vehicle={rc_number}" # Advanced Vehicle
+IFSC_API_ENDPOINT = "https://ifsc-info.gauravyt492.workers.dev/?ifsc={ifsc}"
+IP_API_ENDPOINT = "https://ip-info.gauravyt566.workers.dev/?ip={ip}"
 TG_INFO_API_ENDPOINT = "https://tg-info-neon.vercel.app/user-details?user={user_id}"
 PAK_FAMILY_API_ENDPOINT = "https://paknuminfo-by-narcos.vercel.app/api/familyinfo?cnic={cnic}"
 
