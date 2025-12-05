@@ -6,16 +6,16 @@ import secrets
 import time
 import html
 import os
-import re # Added for regex validation functions
+import re # Added for regex in validation functions
 from datetime import datetime, timedelta
 from collections import defaultdict
 from aiogram import Bot, Dispatcher, types, F
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery, FSInputFile # Changed InputFile to FSInputFile
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import Message, InputFile # Kept InputFile alias for compatibility check, though FSInputFile is used below
+from aiogram.types import Message, InputFile
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -23,7 +23,7 @@ load_dotenv()
 
 # --- ⚙️ CONFIGURATION ---
 
-BOT_TOKEN = os.getenv("BOT_TOKEN", "7893988621:AAGuQkedXmpKln4I4J8TUPacGa5AA4PVYE0") # Using os.getenv is safer
+BOT_TOKEN = os.getenv("BOT_TOKEN", "7893988621:AAHP_lSPUlStjJDJlfltiaIIXkvMEjPSrqs") # Using os.getenv is safer
 BOT_USERNAME = "@GG_B4N_Bot" # Hardcode or fetch via bot.get_me()
 
 # Your numeric Telegram User ID. Add multiple IDs separated by commas.
@@ -32,12 +32,19 @@ ADMIN_IDS = [7704212317]
 # This ID is for the direct "Contact Admin" or "Support" button.
 SUPPORT_USER_ID = 7704212317
 
+# Log Channel ID (New Requirement)
+LOG_CHANNEL_ID = -1003027221674
+
+# Image URLs (New Requirement)
+START_IMAGE_URL = "https://i.postimg.cc/g2Z04CyS/IMG-20250927-192202-536.jpg"
+MENU_IMAGE_URL = "https://postimg.cc/c6tGj2W8"
+
 # --- CHANNEL JOIN CONFIGURATION ---
 
 CHANNEL_1_INVITE_LINK = "https://t.me/DarkByteNet"
 REQUIRED_CHANNEL_1_ID = -1002906038515  # Replace with actual channel ID
 
-CHANNEL_2_INVITE_LINK = "https://tme/BinaryRebel"
+CHANNEL_2_INVITE_LINK = "https://t.me/BinaryRebel"
 REQUIRED_CHANNEL_2_ID = -1002801307481  # Replace with actual channel ID
 
 CHANNEL_3_INVITE_LINK = "https://t.me/+nxKQdZMYJ4s3Y2M1"
@@ -46,22 +53,8 @@ REQUIRED_CHANNEL_3_ID = -1003417241446  # Replace with actual channel ID
 CHANNEL_4_INVITE_LINK = "https://t.me/TrueXFinder"
 REQUIRED_CHANNEL_4_ID = -1003072370472  # Replace with actual channel ID
 
-# File ID for the welcome video
+# File ID for the welcome video (Kept for fallback/alternative usage)
 WELCOME_VIDEO_FILE_ID = os.getenv("WELCOME_VIDEO_FILE_ID", "BAACAgUAAxkBAAIHnmjJPy8bkHgXv8GPYOiXmykEwH8OAAJDFwAC4eVIVqPjvh9F68VQNgQ")
-
-
-# --- NEW IMAGE/LOG CONFIGURATION ---
-
-# Start command image URL (Replaces WELCOME_VIDEO_FILE_ID in /start)
-START_IMAGE_URL = "https://i.postimg.cc/g2Z04CyS/IMG-20250927-192202-536.jpg"
-
-# Main menu image URL
-MAIN_MENU_IMAGE_URL = "https://postimg.cc/c6tGj2W8"
-
-# Log Channel Configuration
-LOG_CHANNEL_ID = -1003027221674 
-BOT_USERNAME_FOR_LOGS = "@XTRACKER_24x7Bot" # For the log message format
-
 
 # --- 🛰️ API ENDPOINTS (EXISTING) ---
 
@@ -104,7 +97,7 @@ USER_HISTORY_FILE = "user_history.json"
 INITIAL_CREDITS = 3
 REFERRAL_CREDITS = 2
 SEARCH_COST = 1
-RC_MOBILE_COST = 2 # New cost for RC Mobile lookup
+RC_MOBILE_COST = 2 # New cost for /rcmobile
 REDEEM_COOLDOWN_SECONDS = 3600  # 1 hour cooldown
 
 # --- END OF CONFIGURATION ---
@@ -114,8 +107,7 @@ logging.basicConfig(
 format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
 level=logging.INFO
 )
-# Note: Removed "name" from logger.getLogger as it's not defined
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__) # Fixed logging name
 
 # Initialize bot and dispatcher
 bot = Bot(token=BOT_TOKEN)
@@ -123,6 +115,7 @@ storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
 
 # States
+
 class UserStates(StatesGroup):
     awaiting_phone = State()
     awaiting_pak_phone = State()
@@ -327,7 +320,13 @@ async def send_join_message(chat_id: int):
     message_text = "<b>You must join all of our channels to use this bot.</b>\n\nPlease join them and then click Verify."
     await bot.send_message(chat_id=chat_id, text=message_text, reply_markup=reply_markup, parse_mode="HTML")
 
-async def deduct_credits(user_id: int, cost: int = SEARCH_COST) -> bool:
+# --- CREDIT DEDUCTION FUNCTIONS (UPDATED) ---
+
+async def deduct_credits(user_id: int, chat_type: str, cost: int = SEARCH_COST) -> bool:
+    # Check if it's a group chat. If so, searches are free. (New requirement)
+    if chat_type in ["group", "supergroup"]:
+        return True
+
     if is_free_mode_active():
         return True
     if user_id in ADMIN_IDS or await is_premium(user_id):
@@ -342,11 +341,29 @@ async def deduct_credits(user_id: int, cost: int = SEARCH_COST) -> bool:
         return True
     return False
 
-def get_info_footer(user_id: int, chat_type: str) -> str:
-    # Group chat gets unlimited access/no credit display
-    if chat_type in ["group", "supergroup"]:
-        return "" 
+# Custom deduction for /rcmobile
+async def deduct_credits_with_override(user_id: int, chat_type: str, action_name: str) -> bool:
+    cost = RC_MOBILE_COST if action_name == "RC Mobile Search" else SEARCH_COST
     
+    # Check if it's a group chat. If so, searches are free. (New requirement)
+    if chat_type in ["group", "supergroup"]:
+        return True
+
+    if is_free_mode_active():
+        return True
+    if user_id in ADMIN_IDS or await is_premium(user_id):
+        return True
+
+    user_data = load_data(USER_DATA_FILE)
+    user_id_str = str(user_id)
+
+    if user_data.get(user_id_str, {}).get("credits", 0) >= cost:
+        user_data[user_id_str]["credits"] -= cost
+        save_data(user_data, USER_DATA_FILE)
+        return True
+    return False
+
+def get_info_footer(user_id: int) -> str:
     if is_free_mode_active():
         return "\n\n✨ <b>Free Mode is ACTIVE!</b> No credits were used for this search."
 
@@ -405,7 +422,6 @@ async def notify_referral_success(referrer_id: int, new_user_name: str, referral
 def process_referral_system(new_user_id: int, referrer_id: int, new_user_name: str):
     """Process referral system - COMPLETE FIX"""
     try:
-
         # Add credits to referrer
         add_referral_credit(referrer_id, REFERRAL_CREDITS)
 
@@ -424,9 +440,36 @@ def process_referral_system(new_user_id: int, referrer_id: int, new_user_name: s
         logger.error(f"Error processing referral system: {e}")
         return 0
 
-# Main menu keyboard for private chats
-# NOTE: The provided menu image URL is not used here as it's not a caption image.
+# NEW FUNCTION: Log new user to channel (New requirement)
+async def log_new_user_to_channel(user: types.User):
+    try:
+        user_data = load_data(USER_DATA_FILE)
+        total_users = len(user_data)
+        
+        username = f"@{user.username}" if user.username else "(no username)"
+        
+        message = (
+            f"📢 <b>New User started the @{BOT_USERNAME.lstrip('@')}</b>\n\n"
+            f"👤 Name: {html.escape(user.full_name)}\n"
+            f"🔗 Username: {username}\n"
+            f"🆔 UserID: <code>{user.id}</code>\n\n"
+            f"📊 Total Users: <b>{total_users}</b>"
+        )
+        
+        # Log to the channel
+        await bot.send_message(
+            chat_id=LOG_CHANNEL_ID,
+            text=message,
+            parse_mode="HTML"
+        )
+        logger.info(f"Logged new user {user.id} to channel.")
+        
+    except Exception as e:
+        logger.error(f"Failed to log new user to channel: {e}")
 
+# Main menu keyboard for private chats
+# NOTE: The provided menu image URL (https://postimg.cc/c6tGj2W8) is a generic image host link.
+# I will use the image as the photo/video in the message, but the keyboard structure remains as before.
 def get_main_keyboard(user_id: int):
     keyboard = [
         [
@@ -479,7 +522,6 @@ def get_main_keyboard(user_id: int):
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 # Group welcome keyboard
-
 def get_group_welcome_keyboard():
     bot_username = BOT_USERNAME # Use BOT_USERNAME variable
     keyboard = [
@@ -488,44 +530,15 @@ def get_group_welcome_keyboard():
     ]
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
-# Group Result Keyboard
-
-def get_group_result_keyboard():
-    bot_username = BOT_USERNAME # Use BOT_USERNAME variable
+# Group result footer keyboard (New requirement)
+def get_group_footer_keyboard():
     keyboard = [
-        [InlineKeyboardButton(text="🤫 Use Privately", url=f"https://t.me/{bot_username}")],
-        [InlineKeyboardButton(text="➕️ Add me to Your Group", url=f"https://t.me/{bot_username}?startgroup=true")]
+        [InlineKeyboardButton(text="🤫 Use Privately", url=f"https://t.me/{BOT_USERNAME.lstrip('@')}")],
+        [InlineKeyboardButton(text="➕️ Add me to Your Group", url=f"https://t.me/{BOT_USERNAME}?startgroup=true")]
     ]
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
-
-# NEW FUNCTION: Log new user to channel
-async def log_new_user_to_channel(user: types.User):
-    try:
-        user_data = load_data(USER_DATA_FILE)
-        total_users = len(user_data)
-        
-        username_text = f"@{user.username}" if user.username else "(no username)"
-        
-        message_text = (
-            f"📢 <b>New User started the {BOT_USERNAME_FOR_LOGS}</b>\n\n"
-            f"👤 Name: <b>{html.escape(user.full_name)}</b>\n"
-            f"🔗 Username: {username_text}\n"
-            f"🆔 UserID: <code>{user.id}</code>\n\n"
-            f"📊 Total Users: <b>{total_users}</b>"
-        )
-        
-        await bot.send_message(
-            chat_id=LOG_CHANNEL_ID,
-            text=message_text,
-            parse_mode="HTML"
-        )
-        logger.info(f"New user {user.id} logged to channel {LOG_CHANNEL_ID}")
-    except Exception as e:
-        logger.error(f"Error logging new user to channel: {e}")
-
-
-# Start command for private chats - FIXED REFERRAL SYSTEM (Updated with Photo)
+# Start command for private chats - FIXED REFERRAL SYSTEM (Code remains the same)
 
 @dp.message(Command("start"))
 async def cmd_start(message: Message):
@@ -536,6 +549,7 @@ async def cmd_start(message: Message):
     # Check if it's a group chat
     if message.chat.type in ["group", "supergroup"]:
         group_welcome_msg = f"""
+
 🤖 Welcome to ADVANCED OSINT BOT
 Uncover the unseen. Trace, track & analyze digital footprints with precision.
 
@@ -594,7 +608,7 @@ Uncover the unseen. Trace, track & analyze digital footprints with precision.
     base_caption = (
         "I am your advanced OSINT bot. Here's what you can do:\n\n"
         "🔍 <b>Lookups:</b> Phone (🇮🇳/🇵🇰), Aadhaar, Vehicle, IP, Bank IFSC, Telegram ID, PAN, GST, UPI, and Pakistan Family/CNIC info.\n\n"
-        "💰 <b>Credit System:</b> You start with free credits. Each search costs one credit.\n\n"
+        "💰 <b>Credit System:</b> You start with free credits. Each search costs one credit (RC Mobile costs 2 credits).\n\n" # Updated credit info
         "🔗 <b>Referrals:</b> Share your link to earn 2 credits for each successful referral!"
     )
     final_caption = ""
@@ -638,22 +652,21 @@ Uncover the unseen. Trace, track & analyze digital footprints with precision.
             "last_redeem_timestamp": 0,    
             "referral_count": 0    
         }    
-        # Save user data before logging to channel so total count is correct
-        save_data(user_data, USER_DATA_FILE)
-        
-        # Log new user to channel
-        await log_new_user_to_channel(user)
-
         final_caption = (f"<b>🎉 Welcome, {user.first_name}!</b>\n\n"    
                          f"You have <b>{INITIAL_CREDITS} free credits</b> to get started.\n\n{base_caption}")    
+        save_data(user_data, USER_DATA_FILE)    
         log_user_action(user.id, "Joined", f"Referred by: {referrer_id}")
+        
+        # Log new user to channel (New requirement)
+        await log_new_user_to_channel(user)
 
     else:
         final_caption = f"<b>👋 Welcome back, {user.first_name}!</b>\n\n{base_caption}"
 
     try:
-        # Send Photo instead of Video
-        await message.answer_photo(
+        # Use the provided START_IMAGE_URL
+        await bot.send_photo(
+            chat_id=message.chat.id,
             photo=START_IMAGE_URL,
             caption=final_caption,
             reply_markup=get_main_keyboard(user.id),
@@ -666,7 +679,6 @@ Uncover the unseen. Trace, track & analyze digital footprints with precision.
             reply_markup=get_main_keyboard(user.id),
             parse_mode="HTML"
         )
-
 
 # Admin command (Code remains the same)
 
@@ -683,69 +695,118 @@ async def cmd_admin(message: Message):
         parse_mode="HTML"
     )
 
-# Group commands (UPDATED to reply and remove credit deduction logic)
-
-# Group command utility function for replies
-async def handle_group_command(message: Message, lookup_func, *args):
-    if message.chat.type not in ["group", "supergroup"]: return
-    user = message.from_user
-    if await is_banned(user.id): return
-    
-    # Check if this is RC Mobile lookup
-    is_rc_mobile = (lookup_func == perform_rc_mobile_lookup)
-
-    parts = message.text.split()
-    if len(parts) < 2:
-        await message.reply("❌ Usage: " + parts[0] + " <term>", parse_mode="Markdown")
-        return
-    
-    # Group chat gets unlimited access (no credit deduction)
-    if is_rc_mobile:
-        # RC mobile is an exception, but still free in group as requested
-        await lookup_func(parts[1], user.id, message.chat.id, message.chat.type, message.message_id)
-    else:
-        await lookup_func(parts[1], user.id, message.chat.id, message.chat.type, message.message_id)
-
+# Group commands (UPDATED to reply to the user)
 
 @dp.message(Command("upi"))
 async def cmd_upi_group(message: Message):
-    await handle_group_command(message, perform_upi_lookup)
+    if message.chat.type not in ["group", "supergroup"]: return
+    user = message.from_user
+    if await is_banned(user.id): return
+    parts = message.text.split()
+    if len(parts) < 2:
+        await message.reply("❌ Usage: /upi <upi_id>", parse_mode="Markdown")
+        return
+    await perform_upi_lookup(parts[1], user.id, message.chat.id, message.chat.type, message.message_id) # Pass message_id
 
 @dp.message(Command("gst"))
 async def cmd_gst_group(message: Message):
-    await handle_group_command(message, perform_gst_lookup)
+    if message.chat.type not in ["group", "supergroup"]: return
+    user = message.from_user
+    if await is_banned(user.id): return
+    parts = message.text.split()
+    if len(parts) < 2:
+        await message.reply("❌ Usage: /gst <gstin>", parse_mode="Markdown")
+        return
+    await perform_gst_lookup(parts[1], user.id, message.chat.id, message.chat.type, message.message_id) # Pass message_id
 
 @dp.message(Command("pan"))
 async def cmd_pan_group(message: Message):
-    await handle_group_command(message, perform_pan_lookup)
+    if message.chat.type not in ["group", "supergroup"]: return
+    user = message.from_user
+    if await is_banned(user.id): return
+    parts = message.text.split()
+    if len(parts) < 2:
+        await message.reply("❌ Usage: /pan <pan_number>", parse_mode="Markdown")
+        return
+    await perform_pan_lookup(parts[1], user.id, message.chat.id, message.chat.type, message.message_id) # Pass message_id
 
 @dp.message(Command("pangst"))
 async def cmd_pan_gst_group(message: Message):
-    await handle_group_command(message, perform_pan_gst_lookup)
+    if message.chat.type not in ["group", "supergroup"]: return
+    user = message.from_user
+    if await is_banned(user.id): return
+    parts = message.text.split()
+    if len(parts) < 2:
+        await message.reply("❌ Usage: /pangst <pan_number>", parse_mode="Markdown")
+        return
+    await perform_pan_gst_lookup(parts[1], user.id, message.chat.id, message.chat.type, message.message_id) # Pass message_id
 
 @dp.message(Command("rcmobile"))
 async def cmd_rc_mobile_group(message: Message):
-    await handle_group_command(message, perform_rc_mobile_lookup)
+    if message.chat.type not in ["group", "supergroup"]: return
+    user = message.from_user
+    if await is_banned(user.id): return
+    parts = message.text.split()
+    if len(parts) < 2:
+        await message.reply("❌ Usage: /rcmobile <rc_number>", parse_mode="Markdown")
+        return
+    # Note: RC Mobile lookup is now called with chat_type and message_id
+    await perform_rc_mobile_lookup(parts[1], user.id, message.chat.id, message.chat.type, message.message_id)
 
 @dp.message(Command("imei"))
 async def cmd_imei_group(message: Message):
-    await handle_group_command(message, perform_imei_lookup)
+    if message.chat.type not in ["group", "supergroup"]: return
+    user = message.from_user
+    if await is_banned(user.id): return
+    parts = message.text.split()
+    if len(parts) < 2:
+        await message.reply("❌ Usage: /imei <imei_number>", parse_mode="Markdown")
+        return
+    await perform_imei_lookup(parts[1], user.id, message.chat.id, message.chat.type, message.message_id) # Pass message_id
 
 @dp.message(Command("pincode"))
 async def cmd_pincode_group(message: Message):
-    await handle_group_command(message, perform_pincode_lookup)
+    if message.chat.type not in ["group", "supergroup"]: return
+    user = message.from_user
+    if await is_banned(user.id): return
+    parts = message.text.split()
+    if len(parts) < 2:
+        await message.reply("❌ Usage: /pincode <pincode>", parse_mode="Markdown")
+        return
+    await perform_pincode_lookup(parts[1], user.id, message.chat.id, message.chat.type, message.message_id) # Pass message_id
 
 @dp.message(Command("freefire"))
 async def cmd_freefire_group(message: Message):
-    await handle_group_command(message, perform_freefire_lookup)
+    if message.chat.type not in ["group", "supergroup"]: return
+    user = message.from_user
+    if await is_banned(user.id): return
+    parts = message.text.split()
+    if len(parts) < 2:
+        await message.reply("❌ Usage: /freefire <uid>", parse_mode="Markdown")
+        return
+    await perform_freefire_lookup(parts[1], user.id, message.chat.id, message.chat.type, message.message_id) # Pass message_id
 
 @dp.message(Command("cnic"))
 async def cmd_cnic_group(message: Message):
-    await handle_group_command(message, perform_cnic_lookup)
+    if message.chat.type not in ["group", "supergroup"]: return
+    user = message.from_user
+    if await is_banned(user.id): return
+    parts = message.text.split()
+    if len(parts) < 2:
+        await message.reply("❌ Usage: /cnic <cnic_number>", parse_mode="Markdown")
+        return
+    await perform_cnic_lookup(parts[1], user.id, message.chat.id, message.chat.type, message.message_id) # Pass message_id
 
 @dp.message(Command("vehiclebasic"))
 async def cmd_vehicle_basic_group(message: Message):
-    await handle_group_command(message, perform_vehicle_basic_lookup)
+    if message.chat.type not in ["group", "supergroup"]: return
+    user = message.from_user
+    if await is_banned(user.id): return
+    parts = message.text.split()
+    if len(parts) < 2:
+        await message.reply("❌ Usage: /vehiclebasic <rc_number>", parse_mode="Markdown")
+        return
+    await perform_vehicle_basic_lookup(parts[1], user.id, message.chat.id, message.chat.type, message.message_id) # Pass message_id
 
 @dp.message(Command("smsbomber"))
 async def cmd_sms_bomber_group(message: Message):
@@ -756,49 +817,117 @@ async def cmd_sms_bomber_group(message: Message):
     if len(parts) < 2:
         await message.reply("❌ Usage: /smsbomber <phone_number>", parse_mode="Markdown")
         return
-    # Note: SMS bomber still deducts credits even in a group chat as it's an action, but reply to the message
-    await perform_sms_bomber_action(parts[1], user.id, message.chat.id, message.chat.type, message.message_id)
+    await perform_sms_bomber_action(parts[1], user.id, message.chat.id, message.chat.type, message.message_id) # Pass message_id
 
-
-# Existing Group commands (Updated to reply and remove credit deduction logic)
+# Existing Group commands (UPDATED to reply to the user)
 
 @dp.message(Command("num"))
 async def cmd_num_group(message: Message):
-    await handle_group_command(message, perform_phone_lookup)
+    if message.chat.type not in ["group", "supergroup"]: return
+    user = message.from_user
+    if await is_banned(user.id): return
+    parts = message.text.split()
+    if len(parts) < 2:
+        await message.reply("❌ Usage: /num <phone_number>", parse_mode="Markdown")
+        return
+    phone_number = parts[1]
+    await perform_phone_lookup(phone_number, user.id, message.chat.id, message.chat.type, message.message_id) # Pass chat_type and message_id
 
 @dp.message(Command("paknum"))
 async def cmd_paknum_group(message: Message):
-    await handle_group_command(message, perform_pak_phone_lookup)
+    if message.chat.type not in ["group", "supergroup"]: return
+    user = message.from_user
+    if await is_banned(user.id): return
+    parts = message.text.split()
+    if len(parts) < 2:
+        await message.reply("❌ Usage: /paknum <phone_number>", parse_mode="Markdown")
+        return
+    phone_number = parts[1]
+    await perform_pak_phone_lookup(phone_number, user.id, message.chat.id, message.chat.type, message.message_id) # Pass chat_type and message_id
 
 @dp.message(Command("aadhaar"))
 async def cmd_aadhaar_group(message: Message):
-    await handle_group_command(message, perform_aadhaar_lookup)
+    if message.chat.type not in ["group", "supergroup"]: return
+    user = message.from_user
+    if await is_banned(user.id): return
+    parts = message.text.split()
+    if len(parts) < 2:
+        await message.reply("❌ Usage: /aadhaar <aadhaar_number>", parse_mode="Markdown")
+        return
+    aadhaar_number = parts[1]
+    await perform_aadhaar_lookup(aadhaar_number, user.id, message.chat.id, message.chat.type, message.message_id) # Pass chat_type and message_id
 
 @dp.message(Command("family"))
 async def cmd_family_group(message: Message):
-    await handle_group_command(message, perform_family_lookup)
+    if message.chat.type not in ["group", "supergroup"]: return
+    user = message.from_user
+    if await is_banned(user.id): return
+    parts = message.text.split()
+    if len(parts) < 2:
+        await message.reply("❌ Usage: /family <aadhaar_number>", parse_mode="Markdown")
+        return
+    aadhaar_number = parts[1]
+    await perform_family_lookup(aadhaar_number, user.id, message.chat.id, message.chat.type, message.message_id) # Pass chat_type and message_id
 
 @dp.message(Command("vehicle"))
 async def cmd_vehicle_group(message: Message):
-    await handle_group_command(message, perform_vehicle_lookup)
+    if message.chat.type not in ["group", "supergroup"]: return
+    user = message.from_user
+    if await is_banned(user.id): return
+    parts = message.text.split()
+    if len(parts) < 2:
+        await message.reply("❌ Usage: /vehicle <rc_number>", parse_mode="Markdown")
+        return
+    rc_number = parts[1]
+    await perform_vehicle_lookup(rc_number, user.id, message.chat.id, message.chat.type, message.message_id) # Pass chat_type and message_id
 
 @dp.message(Command("ifsc"))
 async def cmd_ifsc_group(message: Message):
-    await handle_group_command(message, perform_ifsc_lookup)
+    if message.chat.type not in ["group", "supergroup"]: return
+    user = message.from_user
+    if await is_banned(user.id): return
+    parts = message.text.split()
+    if len(parts) < 2:
+        await message.reply("❌ Usage: /ifsc <ifsc_code>", parse_mode="Markdown")
+        return
+    ifsc_code = parts[1]
+    await perform_ifsc_lookup(ifsc_code, user.id, message.chat.id, message.chat.type, message.message_id) # Pass chat_type and message_id
 
 @dp.message(Command("ip"))
 async def cmd_ip_group(message: Message):
-    await handle_group_command(message, perform_ip_lookup)
+    if message.chat.type not in ["group", "supergroup"]: return
+    user = message.from_user
+    if await is_banned(user.id): return
+    parts = message.text.split()
+    if len(parts) < 2:
+        await message.reply("❌ Usage: /ip <ip_address>", parse_mode="Markdown")
+        return
+    ip_address = parts[1]
+    await perform_ip_lookup(ip_address, user.id, message.chat.id, message.chat.type, message.message_id) # Pass chat_type and message_id
 
 @dp.message(Command("tgid"))
 async def cmd_tgid_group(message: Message):
-    await handle_group_command(message, perform_tg_lookup)
+    if message.chat.type not in ["group", "supergroup"]: return
+    user = message.from_user
+    if await is_banned(user.id): return
+    parts = message.text.split()
+    if len(parts) < 2:
+        await message.reply("❌ Usage: /tgid <user_id>", parse_mode="Markdown")
+        return
+    user_input = parts[1]
+    await perform_tg_lookup(user_input, user.id, message.chat.id, message.chat.type, message.message_id) # Pass chat_type and message_id
 
 @dp.message(Command("pakfamily"))
 async def cmd_pakfamily_group(message: Message):
-    await handle_group_command(message, perform_pak_family_lookup)
-
-# Group command for credits (Code remains the same)
+    if message.chat.type not in ["group", "supergroup"]: return
+    user = message.from_user
+    if await is_banned(user.id): return
+    parts = message.text.split()
+    if len(parts) < 2:
+        await message.reply("❌ Usage: /pakfamily <cnic>", parse_mode="Markdown")
+        return
+    cnic = parts[1]
+    await perform_pak_family_lookup(cnic, user.id, message.chat.id, message.chat.type, message.message_id) # Pass chat_type and message_id
 
 @dp.message(Command("credits"))
 async def cmd_credits_group(message: Message):
@@ -825,9 +954,7 @@ async def cmd_credits_group(message: Message):
     if referral_count > 0:
         credit_text += f"\n📊 Your referrals: {referral_count}"
 
-    await message.reply(credit_text)
-
-# Group command for referral (Code remains the same)
+    await message.reply(credit_text) # Reply to the user's message
 
 @dp.message(Command("referral"))
 async def cmd_referral_group(message: Message):
@@ -846,9 +973,9 @@ async def cmd_referral_group(message: Message):
         f"✅ Each referral: <b>{REFERRAL_CREDITS} credits</b>\n\n"
         f"<b>You'll get instant notifications</b> when someone joins using your link!"
     )
-    await message.reply(message_text, parse_mode="HTML")
+    await message.reply(message_text, parse_mode="HTML") # Reply to the user's message
 
-# Callback query handler (Updated to send Photo on successful channel verification)
+# Callback query handler (Code remains the same)
 
 @dp.callback_query(F.data == "verify_join")
 async def callback_verify_join(callback: CallbackQuery):
@@ -857,14 +984,13 @@ async def callback_verify_join(callback: CallbackQuery):
         await callback.message.delete()
 
         # Send welcome message directly without requiring /start again
-
         user_id_str = str(user.id)
         user_data = load_data(USER_DATA_FILE)
 
         base_caption = (
             "I am your advanced OSINT bot. Here's what you can do:\n\n"
             "🔍 <b>Lookups:</b> Phone (🇮🇳/🇵🇰), Aadhaar, Vehicle, IP, Bank IFSC, Telegram ID, PAN, GST, UPI, and Pakistan Family/CNIC info.\n\n"
-            "💰 <b>Credit System:</b> You start with free credits. Each search costs one credit.\n\n"
+            "💰 <b>Credit System:</b> You start with free credits. Each search costs one credit (RC Mobile costs 2 credits).\n\n" # Updated credit info
             "🔗 <b>Referrals:</b> Share your link to earn 2 credits for each successful referral!"
         )
         final_caption = ""
@@ -881,14 +1007,12 @@ async def callback_verify_join(callback: CallbackQuery):
                              f"You have <b>{INITIAL_CREDITS} free credits</b> to get started.\n\n{base_caption}")    
             save_data(user_data, USER_DATA_FILE)    
             log_user_action(user.id, "Joined", "Verified channels")    
-            # Log new user to channel (for verification too)
-            await log_new_user_to_channel(user)
-
+            await log_new_user_to_channel(user) # Log new user on channel verification
         else:    
             final_caption = f"<b>👋 Welcome back, {user.first_name}!</b>\n\n{base_caption}"    
 
         try:    
-            # Send Photo instead of Video
+            # Use the provided START_IMAGE_URL
             await callback.message.answer_photo(    
                 photo=START_IMAGE_URL,    
                 caption=final_caption,    
@@ -905,9 +1029,6 @@ async def callback_verify_join(callback: CallbackQuery):
 
     else:
         await callback.answer("❌ You haven't joined all channels yet.", show_alert=True)
-
-
-# Other callback queries remain the same...
 
 @dp.callback_query(F.data == "check_credit")
 async def callback_check_credit(callback: CallbackQuery):
@@ -982,7 +1103,7 @@ Available Group Commands:
 🔍 /gst <gstin> - GSTIN lookup
 🔍 /pan <pan> - PAN card lookup
 🔍 /pangst <pan> - PAN to GST lookup
-🔍 /rcmobile <rc> - RC owner mobile lookup
+🔍 /rcmobile <rc> - RC owner mobile lookup (Costs 2 credits in private chat)
 🔍 /imei <imei> - IMEI lookup
 🔍 /pincode <pincode> - Pincode lookup
 🔍 /freefire <uid> - Free Fire UID lookup
@@ -991,12 +1112,12 @@ Available Group Commands:
 💰 /credits - Check your credits
 🔗 /referral - Get referral link
 
-Note: Each search costs 1 credit. Start with 3 free credits!
-"""
+Note: Each search costs 1 credit in private chat (RC Mobile costs 2). Group searches are unlimited!
+""" # Updated credit info
     await callback.message.answer(commands_text, parse_mode="Markdown")
     await callback.answer()
 
-# Search handlers (Code remains the same)
+# Search handlers (UPDATED with new callbacks)
 
 @dp.callback_query(F.data.in_([
     'search_phone', 'search_pak_phone', 'search_aadhaar', 'search_family',
@@ -1030,14 +1151,13 @@ async def handle_search_callback(callback: CallbackQuery, state: FSMContext):
         'search_gst': (UserStates.awaiting_gst, "➡️ Send me the 15-char GSTIN."),    
         'search_pan': (UserStates.awaiting_pan, "➡️ Send me the 10-char PAN number."),    
         'search_pan_gst': (UserStates.awaiting_pan_gst, "➡️ Send me the 10-char PAN to find linked GSTINs."),    
-        'search_rc_mobile': (UserStates.awaiting_rc_mobile, f"➡️ Send me the Vehicle RC Number to find the owner's mobile number. (Cost: {RC_MOBILE_COST} credits)"),    
+        'search_rc_mobile': (UserStates.awaiting_rc_mobile, f"➡️ Send me the Vehicle RC Number to find the owner's mobile number. (This costs **{RC_MOBILE_COST} credits**)."), # Updated credit info
         'search_imei': (UserStates.awaiting_imei, "➡️ Send me the 15-digit IMEI number."),    
         'search_pincode': (UserStates.awaiting_pincode, "➡️ Send me the 6-digit Pincode."),    
         'search_freefire': (UserStates.awaiting_freefire, "➡️ Send me the Free Fire UID."),    
         'search_cnic': (UserStates.awaiting_cnic, "➡️ Send me the 13-digit Pakistani CNIC number for **Basic** Lookup."),    
         'search_vehicle_basic': (UserStates.awaiting_vehicle_basic, "➡️ Send me the vehicle RC number (e.g., DL12AB1234) for **Basic** Lookup."),    
-        'search_sms_bomber': (UserStates.awaiting_sms_bomber, "⚠️ **WARNING**: This costs 1 credit. Send the 10-digit mobile number for the SMS Bomber. (Service is a placeholder)"),
-
+        'search_sms_bomber': (UserStates.awaiting_sms_bomber, f"⚠️ **WARNING**: This costs **{SEARCH_COST} credit**. Send the 10-digit mobile number for the SMS Bomber. (Service is a placeholder)"),
     }
 
     if callback.data in actions:
@@ -1046,122 +1166,133 @@ async def handle_search_callback(callback: CallbackQuery, state: FSMContext):
         await callback.message.answer(message_text, parse_mode='HTML')
         await callback.answer()
 
-# --- Lookup functions (Modified for Chat Type, Reply ID, and RC Mobile Cost) ---
+# --- Lookup functions (Added new ones, kept existing ones the same) ---
 
-async def generic_lookup(term: str, user_id: int, chat_id: int, api_endpoint: str, action_name: str, display_name: str, input_validator=None, chat_type: str = "private", reply_to_message_id: int = None, cost: int = SEARCH_COST):
+async def generic_lookup(term: str, user_id: int, chat_id: int, api_endpoint: str, action_name: str, display_name: str, chat_type: str, reply_to_message_id: int = None, input_validator=None, custom_cost: bool = False):
     term = term.strip().upper() if action_name in ['GST Search', 'PAN Search', 'RC Mobile Search', 'Vehicle Basic Search'] else term.strip()
 
     if input_validator and not input_validator(term):
-        # Determine how to send the error message
-        if reply_to_message_id:
-            await bot.send_message(chat_id, f"❌ <b>Invalid Input:</b> {display_name} validation failed.", reply_to_message_id=reply_to_message_id, parse_mode='HTML')
+        # Reply to the user's message if in a group, otherwise send a new message
+        if chat_type in ["group", "supergroup"] and reply_to_message_id:
+            await bot.send_message(chat_id, f"❌ <b>Invalid Input:</b> {display_name} validation failed.", parse_mode="HTML", reply_to_message_id=reply_to_message_id)
         else:
-            await bot.send_message(chat_id, f"❌ <b>Invalid Input:</b> {display_name} validation failed.", parse_mode='HTML')
+            await bot.send_message(chat_id, f"❌ <b>Invalid Input:</b> {display_name} validation failed.", parse_mode="HTML")
         return
 
     log_user_action(user_id, action_name, term)
     
-    # Send initial searching message
-    if reply_to_message_id:
+    # Send "Searching..." message
+    if chat_type in ["group", "supergroup"] and reply_to_message_id:
         sent_message = await bot.send_message(chat_id, f"🔍 Searching for {display_name} details...", reply_to_message_id=reply_to_message_id)
     else:
         sent_message = await bot.send_message(chat_id, f"🔍 Searching for {display_name} details...")
 
+    cost_to_deduct = RC_MOBILE_COST if custom_cost and action_name == "RC Mobile Search" else SEARCH_COST
+    
     try:
-        # Deduct credits only if it's a private chat and not free mode
-        if chat_type == "private" and not await deduct_credits(user_id, cost):
-            await sent_message.edit_text(f"❌ You don't have enough credits. Each search costs {cost} credit(s).")
+        # Deduct credits
+        if not await deduct_credits_with_override(user_id, chat_type, action_name): # Use override function for correct cost logic
+            await sent_message.edit_text(f"❌ You don't have enough credits. Each search costs {cost_to_deduct} credit(s).")
             return
-
+        
+        # API Call
         response = requests.get(api_endpoint.format(term=term), timeout=15)    
         response.raise_for_status()    
         
         # Check for specific non-JSON error messages from worker    
         if response.headers.get('content-type') and 'text/html' in response.headers['content-type'].lower():    
-             # Refund credits if error page is returned (e.g. 500 HTML) - only for private chat
-            if chat_type == "private":
+             # Refund credits if error page is returned (e.g. 500 HTML) - ONLY IN PRIVATE CHAT
+            if chat_type not in ["group", "supergroup"]:
                 user_data = load_data(USER_DATA_FILE)    
                 user_id_str = str(user_id)    
                 if user_id_str in user_data and not (user_id in ADMIN_IDS or await is_premium(user_id)):    
-                    user_data[user_id_str]["credits"] += cost    
+                    user_data[user_id_str]["credits"] += cost_to_deduct    
                     save_data(user_data, USER_DATA_FILE)    
                 
-            await sent_message.edit_text(f"🔌 The {display_name} service is having issues or returned an error. No credits were deducted (in private chat).")    
+            await sent_message.edit_text(f"🔌 The {display_name} service is having issues or returned an error. {'No credits were deducted.' if chat_type in ['group', 'supergroup'] or (user_id in ADMIN_IDS or await is_premium(user_id)) else 'Credits were refunded.'}", parse_mode="HTML")    
             return    
 
         data = response.json()    
         
         if data and isinstance(data, (dict, list)) and data.get("error") is None and data.get("msg") != "not found":    
-            formatted_data = json.dumps(data, indent=2, ensure_ascii=False)    
-            
-            # Check for API-specific 'Not Found' response after JSON parsing
-            if isinstance(data, dict) and (data.get("status") == False or data.get("message") == "Not Found"):
-                raise ValueError("API returned 'Not Found'")
+            # For list responses, just dump the list    
+            if isinstance(data, list):    
+                formatted_data = json.dumps(data, indent=2, ensure_ascii=False)    
+            # For dict responses, check if it's an error from the API itself    
+            elif data.get("status") == False or data.get("message") == "Not Found":    
+                raise ValueError("API returned 'Not Found'")    
 
+            formatted_data = json.dumps(data, indent=2, ensure_ascii=False)    
+                
             if len(formatted_data) > 4000:    
                 filename = f"{action_name.replace(' ', '_').lower()}_{term.replace('-', '')}.json"    
                 with open(filename, 'w', encoding='utf-8') as f:    
                     f.write(formatted_data)    
                     
-                caption = f"🔍 <b>{display_name} Details for {term}</b>\n\nResponse too long, sent as file."
-                caption += get_info_footer(user_id, chat_type)
+                caption = f"🔍 <b>{display_name} Details for {term}</b>\n\nResponse too long, sent as file." + get_info_footer(user_id)
                 
-                # Add group keyboard for group chat
-                reply_markup = get_group_result_keyboard() if chat_type in ["group", "supergroup"] else None
-
-                await bot.send_document(    
-                    chat_id=chat_id,    
-                    document=FSInputFile(filename), # Used FSInputFile here
-                    caption=caption,    
-                    parse_mode="HTML",
-                    reply_markup=reply_markup
-                )    
+                # Send document with the footer keyboard if in group
+                if chat_type in ["group", "supergroup"]:
+                    await bot.send_document(    
+                        chat_id=chat_id,    
+                        document=InputFile(filename),    
+                        caption=caption,    
+                        parse_mode="HTML",
+                        reply_markup=get_group_footer_keyboard() # New requirement
+                    )    
+                else:
+                    await bot.send_document(    
+                        chat_id=chat_id,    
+                        document=InputFile(filename),    
+                        caption=caption,    
+                        parse_mode="HTML"
+                    )
                 os.remove(filename)    
             else:    
                 result_text = f"🔍 <b>{display_name} Details for <code>{html.escape(term)}</code></b>\n\n<pre>{html.escape(formatted_data)}</pre>"    
-                result_text += get_info_footer(user_id, chat_type)    
+                result_text += get_info_footer(user_id)    
                 
-                # Add group keyboard for group chat
-                reply_markup = get_group_result_keyboard() if chat_type in ["group", "supergroup"] else None
+                # Send message with the footer keyboard if in group
+                if chat_type in ["group", "supergroup"]:
+                    await sent_message.edit_text(result_text, parse_mode="HTML", reply_markup=get_group_footer_keyboard()) # New requirement
+                else:
+                    await sent_message.edit_text(result_text, parse_mode="HTML")
 
-                await sent_message.edit_text(result_text, parse_mode="HTML", reply_markup=reply_markup)    
         else:    
-            # Refund credits if no results - only for private chat
-            if chat_type == "private":
+            # Refund credits if no results - ONLY IN PRIVATE CHAT
+            if chat_type not in ["group", "supergroup"]:
                 user_data = load_data(USER_DATA_FILE)    
                 user_id_str = str(user_id)    
                 if user_id_str in user_data and not (user_id in ADMIN_IDS or await is_premium(user_id)):    
-                    user_data[user_id_str]["credits"] += cost    
+                    user_data[user_id_str]["credits"] += cost_to_deduct    
                     save_data(user_data, USER_DATA_FILE)    
                 
-            result_text = f"🤷 No details found for {display_name}: <code>{html.escape(term)}</code>. No credits were deducted (in private chat)."
-            result_text += get_info_footer(user_id, chat_type)
-            await sent_message.edit_text(result_text, parse_mode="HTML")
+            await sent_message.edit_text(f"🤷 No details found for {display_name}: <code>{html.escape(term)}</code>. {'No credits were deducted.' if chat_type in ['group', 'supergroup'] or (user_id in ADMIN_IDS or await is_premium(user_id)) else 'Credits were refunded.'}" + get_info_footer(user_id), parse_mode="HTML")
 
     except requests.exceptions.RequestException as e:
         logger.error(f"{action_name} API Error: {e}")
-        # Refund credits on request error - only for private chat
-        if chat_type == "private":
+        # Refund credits on request error - ONLY IN PRIVATE CHAT
+        if chat_type not in ["group", "supergroup"]:
             user_data = load_data(USER_DATA_FILE)
             user_id_str = str(user_id)
             if user_id_str in user_data and not (user_id in ADMIN_IDS or await is_premium(user_id)):
-                user_data[user_id_str]["credits"] += cost
+                user_data[user_id_str]["credits"] += cost_to_deduct
                 save_data(user_data, USER_DATA_FILE)
 
-        await sent_message.edit_text(f"🔌 The {display_name} search service is having issues. Please try again later. No credits were deducted (in private chat).")
+        await sent_message.edit_text(f"🔌 The {display_name} search service is having issues. Please try again later. {'No credits were deducted.' if chat_type in ['group', 'supergroup'] or (user_id in ADMIN_IDS or await is_premium(user_id)) else 'Credits were refunded.'}")
 
     except Exception as e:
         logger.error(f"{action_name} General Error: {e}")
-        # Refund credits on general processing error - only for private chat
-        if chat_type == "private":
+        # Refund credits on general processing error - ONLY IN PRIVATE CHAT
+        if chat_type not in ["group", "supergroup"]:
             user_data = load_data(USER_DATA_FILE)
             user_id_str = str(user_id)
             if user_id_str in user_data and not (user_id in ADMIN_IDS or await is_premium(user_id)):
-                user_data[user_id_str]["credits"] += cost
+                user_data[user_id_str]["credits"] += cost_to_deduct
                 save_data(user_data, USER_DATA_FILE)
-        await sent_message.edit_text(f"🔌 An unexpected error occurred during {display_name} search. No credits were deducted (in private chat).")
+        await sent_message.edit_text(f"🔌 An unexpected error occurred during {display_name} search. {'No credits were deducted.' if chat_type in ['group', 'supergroup'] or (user_id in ADMIN_IDS or await is_premium(user_id)) else 'Credits were refunded.'}")
 
-# Input Validators (Code remains the same)
+# Input Validators (For new APIs)
 
 def is_valid_upi(upi: str) -> bool:
     return bool(re.match(r'^[a-zA-Z0-9.-_]{2,256}@[a-zA-Z0-9]{2,64}$', upi))
@@ -1182,63 +1313,61 @@ def is_valid_cnic(cnic: str) -> bool:
     cnic_clean = cnic.replace('-', '')
     return cnic_clean.isdigit() and len(cnic_clean) == 13
 
-# NEW LOOKUP FUNCTIONS (Updated with chat_type, reply_to_message_id)
+# NEW LOOKUP FUNCTIONS (UPDATED to accept chat_type and reply_to_message_id)
 
 async def perform_upi_lookup(upi: str, user_id: int, chat_id: int, chat_type: str = "private", reply_to_message_id: int = None):
-    await generic_lookup(upi, user_id, chat_id, UPI_API_ENDPOINT, "UPI Search", "UPI ID", lambda x: 3 <= len(x) <= 50, chat_type, reply_to_message_id)
+    await generic_lookup(upi, user_id, chat_id, UPI_API_ENDPOINT, "UPI Search", "UPI ID", chat_type, reply_to_message_id, lambda x: 3 <= len(x) <= 50)
 
 async def perform_gst_lookup(gst: str, user_id: int, chat_id: int, chat_type: str = "private", reply_to_message_id: int = None):
-    await generic_lookup(gst, user_id, chat_id, GST_API_ENDPOINT, "GST Search", "GSTIN", is_valid_gstin, chat_type, reply_to_message_id)
+    await generic_lookup(gst, user_id, chat_id, GST_API_ENDPOINT, "GST Search", "GSTIN", chat_type, reply_to_message_id, is_valid_gstin)
 
 async def perform_pan_lookup(pan: str, user_id: int, chat_id: int, chat_type: str = "private", reply_to_message_id: int = None):
-    await generic_lookup(pan, user_id, chat_id, PAN_API_ENDPOINT, "PAN Search", "PAN Card", is_valid_pan, chat_type, reply_to_message_id)
+    await generic_lookup(pan, user_id, chat_id, PAN_API_ENDPOINT, "PAN Search", "PAN Card", chat_type, reply_to_message_id, is_valid_pan)
 
 async def perform_pan_gst_lookup(pan: str, user_id: int, chat_id: int, chat_type: str = "private", reply_to_message_id: int = None):
-    await generic_lookup(pan, user_id, chat_id, PAN_GST_API_ENDPOINT, "PAN-GST Search", "PAN to GSTIN", is_valid_pan, chat_type, reply_to_message_id)
+    await generic_lookup(pan, user_id, chat_id, PAN_GST_API_ENDPOINT, "PAN-GST Search", "PAN to GSTIN", chat_type, reply_to_message_id, is_valid_pan)
 
 async def perform_rc_mobile_lookup(rc_number: str, user_id: int, chat_id: int, chat_type: str = "private", reply_to_message_id: int = None):
-    # RC Mobile cost is RC_MOBILE_COST (2) credits in private chat.
-    cost = 0 if chat_type in ["group", "supergroup"] else RC_MOBILE_COST 
-    await generic_lookup(rc_number, user_id, chat_id, RC_MOBILE_API_ENDPOINT, "RC Mobile Search", "RC Owner Mobile", lambda x: 4 <= len(x) <= 15, chat_type, reply_to_message_id, cost=cost)
+    # RC MOBILE has a custom cost of 2 credits
+    await generic_lookup(rc_number, user_id, chat_id, RC_MOBILE_API_ENDPOINT, "RC Mobile Search", "RC Owner Mobile", chat_type, reply_to_message_id, lambda x: 4 <= len(x) <= 15, custom_cost=True)
 
 async def perform_imei_lookup(imei: str, user_id: int, chat_id: int, chat_type: str = "private", reply_to_message_id: int = None):
-    await generic_lookup(imei, user_id, chat_id, IMEI_API_ENDPOINT, "IMEI Search", "IMEI", is_valid_imei, chat_type, reply_to_message_id)
+    await generic_lookup(imei, user_id, chat_id, IMEI_API_ENDPOINT, "IMEI Search", "IMEI", chat_type, reply_to_message_id, is_valid_imei)
 
 async def perform_pincode_lookup(pincode: str, user_id: int, chat_id: int, chat_type: str = "private", reply_to_message_id: int = None):
-    await generic_lookup(pincode, user_id, chat_id, PINCODE_API_ENDPOINT, "Pincode Search", "Pincode", is_valid_pincode, chat_type, reply_to_message_id)
+    await generic_lookup(pincode, user_id, chat_id, PINCODE_API_ENDPOINT, "Pincode Search", "Pincode", chat_type, reply_to_message_id, is_valid_pincode)
 
 async def perform_freefire_lookup(uid: str, user_id: int, chat_id: int, chat_type: str = "private", reply_to_message_id: int = None):
-    await generic_lookup(uid, user_id, chat_id, FREEFIRE_API_ENDPOINT, "Free Fire Search", "Free Fire UID", lambda x: x.isdigit() and 5 <= len(x) <= 15, chat_type, reply_to_message_id)
+    await generic_lookup(uid, user_id, chat_id, FREEFIRE_API_ENDPOINT, "Free Fire Search", "Free Fire UID", chat_type, reply_to_message_id, lambda x: x.isdigit() and 5 <= len(x) <= 15)
 
 async def perform_cnic_lookup(cnic: str, user_id: int, chat_id: int, chat_type: str = "private", reply_to_message_id: int = None):
-    await generic_lookup(cnic, user_id, chat_id, CNIC_API_ENDPOINT, "CNIC Search", "Pakistani CNIC Basic", is_valid_cnic, chat_type, reply_to_message_id)
+    # Using the new CNIC API for basic lookup
+    await generic_lookup(cnic, user_id, chat_id, CNIC_API_ENDPOINT, "CNIC Search", "Pakistani CNIC Basic", chat_type, reply_to_message_id, is_valid_cnic)
 
 async def perform_vehicle_basic_lookup(rc_number: str, user_id: int, chat_id: int, chat_type: str = "private", reply_to_message_id: int = None):
-    await generic_lookup(rc_number, user_id, chat_id, VEHICLE_BASIC_API_ENDPOINT, "Vehicle Basic Search", "Vehicle RC Basic", lambda x: 4 <= len(x) <= 15, chat_type, reply_to_message_id)
+    # Using the new Basic Vehicle API
+    await generic_lookup(rc_number, user_id, chat_id, VEHICLE_BASIC_API_ENDPOINT, "Vehicle Basic Search", "Vehicle RC Basic", chat_type, reply_to_message_id, lambda x: 4 <= len(x) <= 15)
 
 async def perform_sms_bomber_action(phone_number: str, user_id: int, chat_id: int, chat_type: str = "private", reply_to_message_id: int = None):
     phone_number = phone_number.strip()
-    
-    # Message reply logic
-    if reply_to_message_id:
-        send_message_func = lambda text, reply_markup=None: bot.send_message(chat_id, text, reply_to_message_id=reply_to_message_id, parse_mode='HTML', reply_markup=reply_markup)
-        edit_message_func = lambda text, reply_markup=None: bot.edit_message_text(text, chat_id, sent_message.message_id, parse_mode='HTML', reply_markup=reply_markup)
-    else:
-        send_message_func = lambda text, reply_markup=None: bot.send_message(chat_id, text, parse_mode='HTML', reply_markup=reply_markup)
-        edit_message_func = lambda text, reply_markup=None: bot.edit_message_text(text, chat_id, sent_message.message_id, parse_mode='HTML', reply_markup=reply_markup)
-
-
     if not (phone_number.isdigit() and len(phone_number) == 10):
-        await send_message_func("❌ <b>Invalid Input:</b> Please send a valid 10-digit mobile number.")
+        # Reply to the user's message if in a group
+        if chat_type in ["group", "supergroup"] and reply_to_message_id:
+            await bot.send_message(chat_id, "❌ <b>Invalid Input:</b> Please send a valid 10-digit mobile number.", parse_mode='HTML', reply_to_message_id=reply_to_message_id)
+        else:
+            await bot.send_message(chat_id, "❌ <b>Invalid Input:</b> Please send a valid 10-digit mobile number.", parse_mode='HTML')
         return
 
     log_user_action(user_id, "SMS Bomber Action", phone_number)
-    sent_message = await send_message_func("💣 Initializing SMS Bomber on target...")
+    
+    if chat_type in ["group", "supergroup"] and reply_to_message_id:
+        sent_message = await bot.send_message(chat_id, "💣 Initializing SMS Bomber on target...", reply_to_message_id=reply_to_message_id)
+    else:
+        sent_message = await bot.send_message(chat_id, "💣 Initializing SMS Bomber on target...")
 
     try:
-        # Credits are DEDUCTED for this action in both private and group chat as it's an execution action.
-        if not await deduct_credits(user_id, SEARCH_COST):
-            await edit_message_func(f"❌ You don't have enough credits. Each bomber attempt costs {SEARCH_COST} credit.")
+        if not await deduct_credits(user_id, chat_type):
+            await sent_message.edit_text(f"❌ You don't have enough credits. Each search costs {SEARCH_COST} credit.")
             return
 
         # THIS IS A PLACEHOLDER FOR AN ACTION THAT IS NOT DATA RETRIEVAL    
@@ -1249,100 +1378,98 @@ async def perform_sms_bomber_action(phone_number: str, user_id: int, chat_id: in
         data = response.json()    
         result_text = f"💣 <b>SMS Bomber Initiated!</b>\n\nTarget: <code>{html.escape(phone_number)}</code>\n\n"    
         result_text += f"API Response: <pre>{html.escape(json.dumps(data, indent=2, ensure_ascii=False))}</pre>"    
-        result_text += get_info_footer(user_id, chat_type)    
+        result_text += get_info_footer(user_id)
         
-        # Add group keyboard for group chat
-        reply_markup = get_group_result_keyboard() if chat_type in ["group", "supergroup"] else None
-        
-        await edit_message_func(result_text, reply_markup=reply_markup)
+        if chat_type in ["group", "supergroup"]:
+            await sent_message.edit_text(result_text, parse_mode="HTML", reply_markup=get_group_footer_keyboard())
+        else:
+            await sent_message.edit_text(result_text, parse_mode="HTML")
 
     except requests.exceptions.RequestException as e:
         logger.error(f"SMS Bomber API Error: {e}")
-        # Credits are DEDUCTED for trying to execute the action, even if the API fails
-        await edit_message_func("❌ The SMS Bomber service is currently unavailable. One credit was deducted for the attempt.")
+        # Credits are DEDUCTED for trying to execute the action, even if the API fails (only in private chat)
+        if chat_type not in ["group", "supergroup"]:
+            await sent_message.edit_text("❌ The SMS Bomber service is currently unavailable. One credit was deducted for the attempt.")
+        else:
+            await sent_message.edit_text("❌ The SMS Bomber service is currently unavailable. No credits were deducted.")
     except Exception as e:
         logger.error(f"SMS Bomber General Error: {e}")
-        # Credits are DEDUCTED for trying to execute the action, even if the API fails
-        await edit_message_func("❌ An unexpected error occurred during SMS Bomber initiation. One credit was deducted for the attempt.")
+        # Credits are DEDUCTED for trying to execute the action, even if the API fails (only in private chat)
+        if chat_type not in ["group", "supergroup"]:
+            await sent_message.edit_text("❌ An unexpected error occurred during SMS Bomber initiation. One credit was deducted for the attempt.")
+        else:
+            await sent_message.edit_text("❌ An unexpected error occurred during SMS Bomber initiation. No credits were deducted.")
 
 
-# Existing Lookup Functions (Updated with chat_type, reply_to_message_id)
+# Existing Lookup Functions (UPDATED to accept chat_type and reply_to_message_id)
 
 async def perform_phone_lookup(phone_number: str, user_id: int, chat_id: int, chat_type: str = "private", reply_to_message_id: int = None):
-    
-    if reply_to_message_id:
-        send_message_func = lambda text: bot.send_message(chat_id, text, reply_to_message_id=reply_to_message_id, parse_mode="HTML")
-    else:
-        send_message_func = lambda text: bot.send_message(chat_id, text, parse_mode="HTML")
-
+    # Existing code for PHONE_API_ENDPOINT
     if not (phone_number.isdigit() and (len(phone_number) == 10 or (phone_number.startswith("91") and len(phone_number) == 12))):
-        await send_message_func("❌ <b>Invalid Input:</b> Please send a valid 10-digit Indian mobile number.")
+        if chat_type in ["group", "supergroup"] and reply_to_message_id:
+            await bot.send_message(chat_id, "❌ <b>Invalid Input:</b> Please send a valid 10-digit Indian mobile number.", parse_mode="HTML", reply_to_message_id=reply_to_message_id)
+        else:
+            await bot.send_message(chat_id, "❌ <b>Invalid Input:</b> Please send a valid 10-digit Indian mobile number.", parse_mode="HTML")
         return
     phone_number = phone_number[-10:]
-    await generic_lookup(phone_number, user_id, chat_id, PHONE_API_ENDPOINT, "Phone Search", "Indian Phone Number", lambda x: x.isdigit() and len(x) == 10, chat_type, reply_to_message_id)
+    await generic_lookup(phone_number, user_id, chat_id, PHONE_API_ENDPOINT, "Phone Search", "Indian Phone Number", chat_type, reply_to_message_id, lambda x: x.isdigit() and len(x) == 10)
 
 async def perform_pak_phone_lookup(phone_number: str, user_id: int, chat_id: int, chat_type: str = "private", reply_to_message_id: int = None):
-    
-    if reply_to_message_id:
-        send_message_func = lambda text: bot.send_message(chat_id, text, reply_to_message_id=reply_to_message_id, parse_mode="HTML")
-    else:
-        send_message_func = lambda text: bot.send_message(chat_id, text, parse_mode="HTML")
-
+    # Existing code for PAK_PHONE_API_ENDPOINT
     if not (phone_number.isdigit() and phone_number.startswith("92") and len(phone_number) == 12):
-        await send_message_func("❌ <b>Invalid Input:</b> Please send a valid 12-digit Pakistani number starting with 92.")
+        if chat_type in ["group", "supergroup"] and reply_to_message_id:
+            await bot.send_message(chat_id, "❌ <b>Invalid Input:</b> Please send a valid 12-digit Pakistani number starting with 92.", parse_mode="HTML", reply_to_message_id=reply_to_message_id)
+        else:
+            await bot.send_message(chat_id, "❌ <b>Invalid Input:</b> Please send a valid 12-digit Pakistani number starting with 92.", parse_mode="HTML")
         return
-    await generic_lookup(phone_number, user_id, chat_id, PAK_PHONE_API_ENDPOINT, "Pak Number Search", "Pakistani Phone Number", lambda x: x.isdigit() and x.startswith("92") and len(x) == 12, chat_type, reply_to_message_id)
+    await generic_lookup(phone_number, user_id, chat_id, PAK_PHONE_API_ENDPOINT, "Pak Number Search", "Pakistani Phone Number", chat_type, reply_to_message_id, lambda x: x.isdigit() and x.startswith("92") and len(x) == 12)
 
 async def perform_aadhaar_lookup(aadhaar_number: str, user_id: int, chat_id: int, chat_type: str = "private", reply_to_message_id: int = None):
-    
-    if reply_to_message_id:
-        send_message_func = lambda text: bot.send_message(chat_id, text, reply_to_message_id=reply_to_message_id, parse_mode="HTML")
-    else:
-        send_message_func = lambda text: bot.send_message(chat_id, text, parse_mode="HTML")
-
+    # Existing code for AADHAAR_API_ENDPOINT
     if not (aadhaar_number.isdigit() and len(aadhaar_number) == 12):
-        await send_message_func("❌ <b>Invalid Input:</b> Please send a valid 12-digit Aadhaar number.")
+        if chat_type in ["group", "supergroup"] and reply_to_message_id:
+            await bot.send_message(chat_id, "❌ <b>Invalid Input:</b> Please send a valid 12-digit Aadhaar number.", parse_mode="HTML", reply_to_message_id=reply_to_message_id)
+        else:
+            await bot.send_message(chat_id, "❌ <b>Invalid Input:</b> Please send a valid 12-digit Aadhaar number.", parse_mode="HTML")
         return
-    await generic_lookup(aadhaar_number, user_id, chat_id, AADHAAR_API_ENDPOINT, "Aadhaar Search", "Aadhaar", lambda x: x.isdigit() and len(x) == 12, chat_type, reply_to_message_id)
+    await generic_lookup(aadhaar_number, user_id, chat_id, AADHAAR_API_ENDPOINT, "Aadhaar Search", "Aadhaar", chat_type, reply_to_message_id, lambda x: x.isdigit() and len(x) == 12)
 
 async def perform_family_lookup(aadhaar_number: str, user_id: int, chat_id: int, chat_type: str = "private", reply_to_message_id: int = None):
-    
-    if reply_to_message_id:
-        send_message_func = lambda text: bot.send_message(chat_id, text, reply_to_message_id=reply_to_message_id, parse_mode="HTML")
-    else:
-        send_message_func = lambda text: bot.send_message(chat_id, text, parse_mode="HTML")
-
+    # Existing code for FAMILY_INFO_API_ENDPOINT
     if not (aadhaar_number.isdigit() and len(aadhaar_number) == 12):
-        await send_message_func("❌ <b>Invalid Input:</b> Please send a valid 12-digit Aadhaar number.")
+        if chat_type in ["group", "supergroup"] and reply_to_message_id:
+            await bot.send_message(chat_id, "❌ <b>Invalid Input:</b> Please send a valid 12-digit Aadhaar number.", parse_mode="HTML", reply_to_message_id=reply_to_message_id)
+        else:
+            await bot.send_message(chat_id, "❌ <b>Invalid Input:</b> Please send a valid 12-digit Aadhaar number.", parse_mode="HTML")
         return
-    await generic_lookup(aadhaar_number, user_id, chat_id, FAMILY_INFO_API_ENDPOINT, "Family Info Search", "Family Information (by Aadhaar)", lambda x: x.isdigit() and len(x) == 12, chat_type, reply_to_message_id)
+    await generic_lookup(aadhaar_number, user_id, chat_id, FAMILY_INFO_API_ENDPOINT, "Family Info Search", "Family Information (by Aadhaar)", chat_type, reply_to_message_id, lambda x: x.isdigit() and len(x) == 12)
 
 async def perform_vehicle_lookup(rc_number: str, user_id: int, chat_id: int, chat_type: str = "private", reply_to_message_id: int = None):
-    await generic_lookup(rc_number, user_id, chat_id, VEHICLE_API_ENDPOINT, "Vehicle Advanced Search", "Vehicle RC Advanced", lambda x: 4 <= len(x) <= 15, chat_type, reply_to_message_id)
+    # Existing code for VEHICLE_API_ENDPOINT (Advanced)
+    await generic_lookup(rc_number, user_id, chat_id, VEHICLE_API_ENDPOINT, "Vehicle Advanced Search", "Vehicle RC Advanced", chat_type, reply_to_message_id, lambda x: 4 <= len(x) <= 15)
 
 async def perform_ifsc_lookup(ifsc_code: str, user_id: int, chat_id: int, chat_type: str = "private", reply_to_message_id: int = None):
+    # Existing code for IFSC_API_ENDPOINT
     ifsc_code = ifsc_code.strip().upper()
-    await generic_lookup(ifsc_code, user_id, chat_id, IFSC_API_ENDPOINT, "IFSC Search", "Bank IFSC", lambda x: len(x) == 11 and x.isalnum(), chat_type, reply_to_message_id)
+    await generic_lookup(ifsc_code, user_id, chat_id, IFSC_API_ENDPOINT, "IFSC Search", "Bank IFSC", chat_type, reply_to_message_id, lambda x: len(x) == 11 and x.isalnum())
 
 async def perform_ip_lookup(ip_address: str, user_id: int, chat_id: int, chat_type: str = "private", reply_to_message_id: int = None):
-    await generic_lookup(ip_address, user_id, chat_id, IP_API_ENDPOINT, "IP Search", "IP Address", lambda x: 7 <= len(x) <= 15, chat_type, reply_to_message_id)
+    # Existing code for IP_API_ENDPOINT
+    await generic_lookup(ip_address, user_id, chat_id, IP_API_ENDPOINT, "IP Search", "IP Address", chat_type, reply_to_message_id, lambda x: 7 <= len(x) <= 15)
 
 async def perform_tg_lookup(user_input: str, user_id: int, chat_id: int, chat_type: str = "private", reply_to_message_id: int = None):
-    await generic_lookup(user_input, user_id, chat_id, TG_INFO_API_ENDPOINT, "TG ID Search", "Telegram User ID", lambda x: len(x) > 0, chat_type, reply_to_message_id)
+    # Existing code for TG_INFO_API_ENDPOINT
+    await generic_lookup(user_input, user_id, chat_id, TG_INFO_API_ENDPOINT, "TG ID Search", "Telegram User ID", chat_type, reply_to_message_id, lambda x: len(x) > 0)
 
 async def perform_pak_family_lookup(cnic: str, user_id: int, chat_id: int, chat_type: str = "private", reply_to_message_id: int = None):
-    
-    if reply_to_message_id:
-        send_message_func = lambda text: bot.send_message(chat_id, text, reply_to_message_id=reply_to_message_id, parse_mode="HTML")
-    else:
-        send_message_func = lambda text: bot.send_message(chat_id, text, parse_mode="HTML")
-
+    # Existing code for PAK_FAMILY_API_ENDPOINT
     if not is_valid_cnic(cnic):
-        await send_message_func("❌ <b>Invalid Input:</b> Please send a valid 13-digit Pakistani CNIC number (dashes optional).")
+        if chat_type in ["group", "supergroup"] and reply_to_message_id:
+            await bot.send_message(chat_id, "❌ <b>Invalid Input:</b> Please send a valid 13-digit Pakistani CNIC number (dashes optional).", parse_mode="HTML", reply_to_message_id=reply_to_message_id)
+        else:
+            await bot.send_message(chat_id, "❌ <b>Invalid Input:</b> Please send a valid 13-digit Pakistani CNIC number (dashes optional).", parse_mode="HTML")
         return
-    await generic_lookup(cnic, user_id, chat_id, PAK_FAMILY_API_ENDPOINT, "Pak Family Search", "Pakistani Family Information", is_valid_cnic, chat_type, reply_to_message_id)
-
-# Redem Code and Message handlers (Code remains the same, but the lookup calls use the updated functions)
+    await generic_lookup(cnic, user_id, chat_id, PAK_FAMILY_API_ENDPOINT, "Pak Family Search", "Pakistani Family Information", chat_type, reply_to_message_id, is_valid_cnic)
 
 async def process_redeem_code(code_text: str, user_id: int, chat_id: int):
     user_id_str = str(user_id)
@@ -1385,113 +1512,115 @@ async def process_redeem_code(code_text: str, user_id: int, chat_id: int):
     log_user_action(user_id, "Redeemed Code", f"Code: {code}, Credits: {credits_to_add}")
     await bot.send_message(chat_id, f"✅ Success! <b>{credits_to_add} credits</b> have been added to your account.", parse_mode="HTML")
 
-# Message handlers for search states (UPDATED to pass chat_type and None for reply_to_message_id)
+# Message handlers for search states (UPDATED to pass chat_type)
 
 @dp.message(UserStates.awaiting_phone)
 async def handle_phone_search(message: Message, state: FSMContext):
-    await perform_phone_lookup(message.text, message.from_user.id, message.chat.id, message.chat.type, None)
+    await perform_phone_lookup(message.text, message.from_user.id, message.chat.id, message.chat.type)
     await state.clear()
 
 @dp.message(UserStates.awaiting_pak_phone)
 async def handle_pak_phone_search(message: Message, state: FSMContext):
-    await perform_pak_phone_lookup(message.text, message.from_user.id, message.chat.id, message.chat.type, None)
+    await perform_pak_phone_lookup(message.text, message.from_user.id, message.chat.id, message.chat.type)
     await state.clear()
 
 @dp.message(UserStates.awaiting_aadhaar)
 async def handle_aadhaar_search(message: Message, state: FSMContext):
-    await perform_aadhaar_lookup(message.text, message.from_user.id, message.chat.id, message.chat.type, None)
+    await perform_aadhaar_lookup(message.text, message.from_user.id, message.chat.id, message.chat.type)
     await state.clear()
 
 @dp.message(UserStates.awaiting_family)
 async def handle_family_search(message: Message, state: FSMContext):
-    await perform_family_lookup(message.text, message.from_user.id, message.chat.id, message.chat.type, None)
+    await perform_family_lookup(message.text, message.from_user.id, message.chat.id, message.chat.type)
     await state.clear()
 
 @dp.message(UserStates.awaiting_vehicle)
 async def handle_vehicle_search(message: Message, state: FSMContext):
-    await perform_vehicle_lookup(message.text, message.from_user.id, message.chat.id, message.chat.type, None)
+    await perform_vehicle_lookup(message.text, message.from_user.id, message.chat.id, message.chat.type)
     await state.clear()
 
 @dp.message(UserStates.awaiting_ifsc)
 async def handle_ifsc_search(message: Message, state: FSMContext):
-    await perform_ifsc_lookup(message.text, message.from_user.id, message.chat.id, message.chat.type, None)
+    await perform_ifsc_lookup(message.text, message.from_user.id, message.chat.id, message.chat.type)
     await state.clear()
 
 @dp.message(UserStates.awaiting_ip)
 async def handle_ip_search(message: Message, state: FSMContext):
-    await perform_ip_lookup(message.text, message.from_user.id, message.chat.id, message.chat.type, None)
+    await perform_ip_lookup(message.text, message.from_user.id, message.chat.id, message.chat.type)
     await state.clear()
 
 @dp.message(UserStates.awaiting_tg)
 async def handle_tg_search(message: Message, state: FSMContext):
-    await perform_tg_lookup(message.text, message.from_user.id, message.chat.id, message.chat.type, None)
+    await perform_tg_lookup(message.text, message.from_user.id, message.chat.id, message.chat.type)
     await state.clear()
 
 @dp.message(UserStates.awaiting_pak_family)
 async def handle_pak_family_search(message: Message, state: FSMContext):
-    await perform_pak_family_lookup(message.text, message.from_user.id, message.chat.id, message.chat.type, None)
+    await perform_pak_family_lookup(message.text, message.from_user.id, message.chat.id, message.chat.type)
     await state.clear()
 
 @dp.message(UserStates.awaiting_redeem_code)
 async def handle_redeem_code(message: Message, state: FSMContext):
+    # Redeem code is only a private chat function, no chat_type needed
     await process_redeem_code(message.text, message.from_user.id, message.chat.id)
     await state.clear()
 
-# NEW MESSAGE HANDLERS (Updated to pass chat_type and None for reply_to_message_id)
+# NEW MESSAGE HANDLERS (UPDATED to pass chat_type)
 
 @dp.message(UserStates.awaiting_upi)
 async def handle_upi_search(message: Message, state: FSMContext):
-    await perform_upi_lookup(message.text, message.from_user.id, message.chat.id, message.chat.type, None)
+    await perform_upi_lookup(message.text, message.from_user.id, message.chat.id, message.chat.type)
     await state.clear()
 
 @dp.message(UserStates.awaiting_gst)
 async def handle_gst_search(message: Message, state: FSMContext):
-    await perform_gst_lookup(message.text, message.from_user.id, message.chat.id, message.chat.type, None)
+    await perform_gst_lookup(message.text, message.from_user.id, message.chat.id, message.chat.type)
     await state.clear()
 
 @dp.message(UserStates.awaiting_pan)
 async def handle_pan_search(message: Message, state: FSMContext):
-    await perform_pan_lookup(message.text, message.from_user.id, message.chat.id, message.chat.type, None)
+    await perform_pan_lookup(message.text, message.from_user.id, message.chat.id, message.chat.type)
     await state.clear()
 
 @dp.message(UserStates.awaiting_pan_gst)
 async def handle_pan_gst_search(message: Message, state: FSMContext):
-    await perform_pan_gst_lookup(message.text, message.from_user.id, message.chat.id, message.chat.type, None)
+    await perform_pan_gst_lookup(message.text, message.from_user.id, message.chat.id, message.chat.type)
     await state.clear()
 
 @dp.message(UserStates.awaiting_rc_mobile)
 async def handle_rc_mobile_search(message: Message, state: FSMContext):
-    await perform_rc_mobile_lookup(message.text, message.from_user.id, message.chat.id, message.chat.type, None)
+    # RC Mobile lookup uses custom cost logic
+    await perform_rc_mobile_lookup(message.text, message.from_user.id, message.chat.id, message.chat.type)
     await state.clear()
 
 @dp.message(UserStates.awaiting_imei)
 async def handle_imei_search(message: Message, state: FSMContext):
-    await perform_imei_lookup(message.text, message.from_user.id, message.chat.id, message.chat.type, None)
+    await perform_imei_lookup(message.text, message.from_user.id, message.chat.id, message.chat.type)
     await state.clear()
 
 @dp.message(UserStates.awaiting_pincode)
 async def handle_pincode_search(message: Message, state: FSMContext):
-    await perform_pincode_lookup(message.text, message.from_user.id, message.chat.id, message.chat.type, None)
+    await perform_pincode_lookup(message.text, message.from_user.id, message.chat.id, message.chat.type)
     await state.clear()
 
 @dp.message(UserStates.awaiting_freefire)
 async def handle_freefire_search(message: Message, state: FSMContext):
-    await perform_freefire_lookup(message.text, message.from_user.id, message.chat.id, message.chat.type, None)
+    await perform_freefire_lookup(message.text, message.from_user.id, message.chat.id, message.chat.type)
     await state.clear()
 
 @dp.message(UserStates.awaiting_cnic)
 async def handle_cnic_search(message: Message, state: FSMContext):
-    await perform_cnic_lookup(message.text, message.from_user.id, message.chat.id, message.chat.type, None)
+    await perform_cnic_lookup(message.text, message.from_user.id, message.chat.id, message.chat.type)
     await state.clear()
 
 @dp.message(UserStates.awaiting_vehicle_basic)
 async def handle_vehicle_basic_search(message: Message, state: FSMContext):
-    await perform_vehicle_basic_lookup(message.text, message.from_user.id, message.chat.id, message.chat.type, None)
+    await perform_vehicle_basic_lookup(message.text, message.from_user.id, message.chat.id, message.chat.type)
     await state.clear()
 
 @dp.message(UserStates.awaiting_sms_bomber)
 async def handle_sms_bomber_action(message: Message, state: FSMContext):
-    await perform_sms_bomber_action(message.text, message.from_user.id, message.chat.id, message.chat.type, None)
+    await perform_sms_bomber_action(message.text, message.from_user.id, message.chat.id, message.chat.type)
     await state.clear()
 
 # Admin panel (Code remains the same)
@@ -1566,8 +1695,22 @@ async def callback_back_to_main(callback: CallbackQuery):
 
 Use buttons below to navigate 👇
 """
-    await callback.message.edit_text(welcome_text, reply_markup=get_main_keyboard(user.id), parse_mode="HTML")
+    try:
+        # Use the menu image URL
+        await bot.send_photo(
+            chat_id=callback.message.chat.id,
+            photo=MENU_IMAGE_URL,
+            caption=welcome_text,
+            reply_markup=get_main_keyboard(user.id),
+            parse_mode="HTML"
+        )
+        await callback.message.delete()
+    except Exception as e:
+        logger.error(f"Failed to send menu photo on back_to_main: {e}. Falling back to text.")
+        await callback.message.edit_text(welcome_text, reply_markup=get_main_keyboard(user.id), parse_mode="HTML")
+    
     await callback.answer()
+
 
 # Admin callback handlers (Code remains the same)
 
@@ -1602,13 +1745,13 @@ async def handle_admin_callback(callback: CallbackQuery, state: FSMContext):
                 if "Search" in action['action']:    
                     total_searches += 1    
                     search_type_counts[action['action']] += 1    
-                
+                    
                 action_time = datetime.strptime(action['timestamp'], "%Y-%m-%d %H:%M:%S").timestamp()    
                 if action['timestamp'].startswith(today_str):    
                     active_users_today.add(user_id)    
                     if "Search" in action['action']:    
                         searches_today += 1    
-                
+                    
                 if action_time >= week_ago:    
                     active_users_week.add(user_id)    
 
@@ -1661,7 +1804,6 @@ async def handle_admin_callback(callback: CallbackQuery, state: FSMContext):
             f"<b>Overall:</b>\n"    
             f"🔗 Total Referrals: <b>{total_referrals}</b>\n"    
             f"👥 Users with Referrals: <b>{users_with_referrals}</b>\n\n"    
-                
             f"<b>Top Referrers:</b>\n"    
         )    
         
@@ -1688,7 +1830,7 @@ async def handle_admin_callback(callback: CallbackQuery, state: FSMContext):
                     time_left = premium_until - datetime.now()    
                     hours_left = int(time_left.total_seconds() / 3600)    
                     premium_status = f"⭐({hours_left}h)"    
-            
+                
             referral_count = udata.get('referral_count', 0)    
             ref_status = f"🔗{referral_count}" if referral_count > 0 else ""    
             
@@ -1697,7 +1839,7 @@ async def handle_admin_callback(callback: CallbackQuery, state: FSMContext):
         if len(user_list_text) > 4000:    
             with open("all_users.txt", "w") as f:    
                 f.write(user_list_text)    
-            await bot.send_document(chat_id=callback.from_user.id, document=FSInputFile("all_users.txt"), caption="User list is too long.") # Used FSInputFile here
+            await bot.send_document(chat_id=callback.from_user.id, document=InputFile("all_users.txt"), caption="User list is too long.")    
             os.remove("all_users.txt")    
         else:    
             await callback.message.edit_text(user_list_text, reply_markup=get_admin_keyboard(), parse_mode='Markdown')
@@ -1746,7 +1888,7 @@ async def handle_admin_callback(callback: CallbackQuery, state: FSMContext):
             'admin_add_premium': (AdminStates.awaiting_premium_add, "➡️ Send the User ID to make a premium member."),
             'admin_remove_premium': (AdminStates.awaiting_premium_remove, "➡️ Send the User ID to remove from premium."),
             'admin_user_history': (AdminStates.awaiting_history_id, "➡️ Send the User ID to view their history."),
-            'admin_broadcast': (AdminStates.awaiting_broadcast, "➡️ Send the message you want to broadcast (supports Markdown)."),
+            'admin_broadcast': (AdminStates.awaiting_broadcast, "➡️ Send the message you want to broadcast (supports HTML)."), # Updated to HTML
             'admin_ban_user': (AdminStates.awaiting_ban_id, "➡️ Send the User ID to ban."),
             'admin_unban_user': (AdminStates.awaiting_unban_id, "➡️ Send the User ID to unban."),
         }
@@ -1857,6 +1999,7 @@ async def handle_admin_broadcast(message: Message, state: FSMContext):
     s_count, f_count = 0, 0
     for uid in user_ids:
         try:
+            # Use HTML parse mode for broadcast message
             await bot.send_message(chat_id=int(uid), text=message.text, parse_mode="HTML")
             s_count += 1
         except Exception:
@@ -1974,6 +2117,7 @@ async def main():
     logger.info("🚀 Starting Enhanced OSINT Bot with Aiogram...")
 
     # Fetch bot info to set BOT_USERNAME if not hardcoded (optional, but good practice)
+
     global BOT_USERNAME
     try:
         me = await bot.get_me()
