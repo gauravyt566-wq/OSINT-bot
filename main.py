@@ -231,7 +231,8 @@ def add_premium_days(user_id: int, days: int):
             "redeemed_codes": [], 
             "last_redeem_timestamp": 0, 
             "referral_count": 0,
-            "last_daily_credits": None
+            "last_daily_credits": None,
+            "group_credits": 0
         }
 
     premium_until = datetime.now() + timedelta(days=days)
@@ -250,7 +251,8 @@ def add_referral_credit(user_id: int, credits: int):
             "redeemed_codes": [],
             "last_redeem_timestamp": 0,
             "referral_count": 0,
-            "last_daily_credits": None
+            "last_daily_credits": None,
+            "group_credits": 0
         }
 
     user_data[user_id_str]["credits"] += credits
@@ -269,7 +271,8 @@ def increment_referral_count(user_id: int):
             "redeemed_codes": [],
             "last_redeem_timestamp": 0,
             "referral_count": 0,
-            "last_daily_credits": None
+            "last_daily_credits": None,
+            "group_credits": 0
         }
 
     if "referral_count" not in user_data[user_id_str]:
@@ -296,6 +299,9 @@ async def check_membership(user_id: int, channel_id: int) -> bool:
         member = await bot.get_chat_member(chat_id=channel_id, user_id=user_id)
         return member.status in ['member', 'administrator', 'creator']
     except Exception as e:
+        # If bot is kicked from channel, assume user is not a member
+        if "kicked" in str(e).lower() or "forbidden" in str(e).lower():
+            return False
         logger.error(f"Error checking membership for user {user_id} in channel {channel_id}: {e}")
         return False
 
@@ -351,7 +357,8 @@ async def deduct_credits(user_id: int, chat_type: str, cost: int = SEARCH_COST) 
             "redeemed_codes": [],
             "last_redeem_timestamp": 0,
             "referral_count": 0,
-            "last_daily_credits": None
+            "last_daily_credits": None,
+            "group_credits": 0
         }
         save_data(user_data, USER_DATA_FILE)
 
@@ -500,6 +507,13 @@ def process_referral_system(new_user_id: int, referrer_id: int, new_user_name: s
 
 async def log_new_user_to_channel(user: types.User):
     try:
+        # Check if log channel exists
+        try:
+            await bot.get_chat(chat_id=LOG_CHANNEL_ID)
+        except Exception as e:
+            logger.error(f"Log channel not found: {e}")
+            return
+            
         user_data = load_data(USER_DATA_FILE)
         total_users = len(user_data)
         
@@ -600,25 +614,36 @@ async def check_channel_membership_for_group(user_id: int, chat_id: int, message
     """Check if user has joined all channels and send join message if not"""
     if not await is_subscribed(user_id):
         missing_channels = []
+        keyboard_buttons = []
         
         if not await check_membership(user_id, REQUIRED_CHANNEL_1_ID):
-            missing_channels.append(f"1. {CHANNEL_1_INVITE_LINK}")
+            missing_channels.append("Channel 1")
+            keyboard_buttons.append([InlineKeyboardButton(text="➡️ Join Channel 1", url=CHANNEL_1_INVITE_LINK)])
+        
         if not await check_membership(user_id, REQUIRED_CHANNEL_2_ID):
-            missing_channels.append(f"2. {CHANNEL_2_INVITE_LINK}")
+            missing_channels.append("Channel 2")
+            keyboard_buttons.append([InlineKeyboardButton(text="➡️ Join Channel 2", url=CHANNEL_2_INVITE_LINK)])
+        
         if not await check_membership(user_id, REQUIRED_CHANNEL_3_ID):
-            missing_channels.append(f"3. {CHANNEL_3_INVITE_LINK}")
+            missing_channels.append("Channel 3")
+            keyboard_buttons.append([InlineKeyboardButton(text="➡️ Join Channel 3", url=CHANNEL_3_INVITE_LINK)])
+        
         if not await check_membership(user_id, REQUIRED_CHANNEL_4_ID):
-            missing_channels.append(f"4. {CHANNEL_4_INVITE_LINK}")
+            missing_channels.append("Channel 4")
+            keyboard_buttons.append([InlineKeyboardButton(text="➡️ Join Channel 4", url=CHANNEL_4_INVITE_LINK)])
         
         if missing_channels:
+            keyboard_buttons.append([InlineKeyboardButton(text="✅ Verify", callback_data='verify_join')])
+            reply_markup = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+            
             message_text = "❌ <b>You must join all our channels to use this bot:</b>\n\n"
-            message_text += "\n".join(missing_channels)
-            message_text += "\n\nJoin all channels and try again!"
+            message_text += "\n".join([f"• {channel}" for channel in missing_channels])
+            message_text += "\n\nJoin all channels and then click Verify!"
             
             if message_id:
-                await bot.send_message(chat_id=chat_id, text=message_text, parse_mode="HTML", reply_to_message_id=message_id)
+                await bot.send_message(chat_id=chat_id, text=message_text, parse_mode="HTML", reply_markup=reply_markup, reply_to_message_id=message_id)
             else:
-                await bot.send_message(chat_id=chat_id, text=message_text, parse_mode="HTML")
+                await bot.send_message(chat_id=chat_id, text=message_text, parse_mode="HTML", reply_markup=reply_markup)
             return False
     return True
 
@@ -856,8 +881,6 @@ async def cmd_rc_mobile_group(message: Message):
     await perform_rc_mobile_lookup(rc_number, user.id, message.chat.id, message.chat.type, message.message_id)
 
 # Add similar channel checks for other group commands...
-
-# --- Fixed group command handlers with channel check ---
 
 @dp.message(Command("upi"))
 async def cmd_upi_group(message: Message):
@@ -1223,7 +1246,10 @@ async def cmd_referral_group(message: Message):
 async def callback_verify_join(callback: CallbackQuery):
     user = callback.from_user
     if await is_subscribed(user.id):
-        await callback.message.delete()
+        try:
+            await callback.message.delete()
+        except:
+            pass
 
         user_id_str = str(user.id)
         user_data = load_data(USER_DATA_FILE)
@@ -1446,30 +1472,9 @@ async def generic_lookup(term: str, user_id: int, chat_id: int, api_endpoint: st
                 await sent_message.edit_text(f"❌ You don't have enough credits. Each search costs {cost_to_deduct} credit(s).")
             return
         
-        # Format API endpoint
-        if action_name == "RC Mobile Search":
-            final_api_endpoint = api_endpoint.format(term=term)
-        elif action_name == "Vehicle Advanced Search":
-            final_api_endpoint = api_endpoint.format(rc_number=term)
-        elif action_name == "Family Info Search":
-            final_api_endpoint = api_endpoint.format(aadhaar=term)
-        elif action_name == "Phone Search":
-            final_api_endpoint = api_endpoint.format(num=term)
-        elif action_name == "Pak Number Search":
-            final_api_endpoint = api_endpoint.format(num=term)
-        elif action_name == "Aadhaar Search":
-            final_api_endpoint = api_endpoint.format(aadhar=term)
-        elif action_name == "Bank IFSC":
-            final_api_endpoint = api_endpoint.format(ifsc=term)
-        elif action_name == "IP Search":
-            final_api_endpoint = api_endpoint.format(ip=term)
-        elif action_name == "TG ID Search":
-            final_api_endpoint = api_endpoint.format(user_id=term)
-        elif action_name == "Pak Family Search":
-            final_api_endpoint = api_endpoint.format(cnic=term)
-        else:
-            final_api_endpoint = api_endpoint.format(term=term)
-
+        # Format API endpoint - FIXED: All endpoints use {term} now
+        final_api_endpoint = api_endpoint.format(term=term)
+        
         # API Call
         response = requests.get(final_api_endpoint, timeout=15)
         response.raise_for_status()
@@ -1835,7 +1840,7 @@ async def handle_sms_bomber_action(message: Message, state: FSMContext):
     await perform_sms_bomber_action(message.text, message.from_user.id, message.chat.id, message.chat.type)
     await state.clear()
 
-# Admin panel functions (keep the same as before)
+# Admin panel functions
 def get_admin_keyboard():
     free_mode = is_free_mode_active()
     free_mode_text = "Free Mode (ON ✅)" if free_mode else "Free Mode (OFF ❌)"
@@ -1886,7 +1891,8 @@ async def callback_admin_panel(callback: CallbackQuery):
         await callback.answer("❌ Admin access required!", show_alert=True)
         return
 
-    await callback.message.edit_text(
+    # Send new message instead of editing
+    await callback.message.answer(
         "👑 <b>Welcome to the Admin Panel</b>\n\nSelect an option to manage the bot.",
         reply_markup=get_admin_keyboard(),
         parse_mode="HTML"
@@ -1917,11 +1923,11 @@ Use buttons below to navigate 👇
         await callback.message.delete()
     except Exception as e:
         logger.error(f"Failed to send menu photo on back_to_main: {e}. Falling back to text.")
-        await callback.message.edit_text(welcome_text, reply_markup=get_main_keyboard(user.id), parse_mode="HTML")
+        await callback.message.answer(welcome_text, reply_markup=get_main_keyboard(user.id), parse_mode="HTML")
     
     await callback.answer()
 
-# Admin callback handlers (keep the same as before)
+# Admin callback handlers
 @dp.callback_query(F.data.startswith("admin_"))
 async def handle_admin_callback(callback: CallbackQuery, state: FSMContext):
     user = callback.from_user
@@ -1932,16 +1938,161 @@ async def handle_admin_callback(callback: CallbackQuery, state: FSMContext):
     data = callback.data
 
     if data == 'admin_stats':
-        # Keep the same stats function
-        pass
+        user_data = load_data(USER_DATA_FILE)
+        premium_users = load_data(PREMIUM_USERS_FILE)
+        banned_users = load_data(BANNED_USERS_FILE)
+        user_history = load_data(USER_HISTORY_FILE)
+        redeem_codes = load_data(REDEEM_CODES_FILE)
+
+        today_str = datetime.now().strftime("%Y-%m-%d")    
+        searches_today = 0    
+        total_searches = 0    
+        active_users_today = set()    
+        active_users_week = set()    
+        search_type_counts = defaultdict(int)    
+
+        week_ago = datetime.now().timestamp() - (7 * 24 * 60 * 60)    
+        
+        for user_id_str, actions in user_history.items():    
+            for action in actions:    
+                if "Search" in action['action']:    
+                    total_searches += 1    
+                    search_type_counts[action['action']] += 1    
+                    
+                try:
+                    action_time = datetime.strptime(action['timestamp'], "%Y-%m-%d %H:%M:%S").timestamp()
+                    if action['timestamp'].startswith(today_str):    
+                        active_users_today.add(user_id_str)    
+                        if "Search" in action['action']:    
+                            searches_today += 1    
+                        
+                    if action_time >= week_ago:    
+                        active_users_week.add(user_id_str)
+                except ValueError:
+                    logger.warning(f"Skipping badly formatted timestamp: {action['timestamp']}")
+                    
+        active_codes = sum(1 for code in redeem_codes.values() if code.get('uses_left', 0) > 0)    
+        total_credits_in_codes = sum(code.get('credits', 0) * code.get('uses_left', 0) for code in redeem_codes.values())    
+
+        most_common_search = max(search_type_counts, key=search_type_counts.get) if search_type_counts else "None"    
+
+        stats_message = (    
+            f"📊 <b>Bot Statistics</b>\n\n"    
+            f"<b>Overall:</b>\n"    
+            f"👥 Total Users: <b>{len(user_data)}</b>\n"    
+            f"⭐ Permanent Premium Users: <b>{len(premium_users)}</b>\n"    
+            f"🚫 Banned Users: <b>{len(banned_users)}</b>\n"    
+            f"🎫 Active Codes: <b>{active_codes}</b>\n\n"    
+                
+            f"<b>Activity (Today):</b>\n"    
+            f"📈 Searches Today: <b>{searches_today}</b>\n"    
+            f"🏃‍♂️ Active Users Today: <b>{len(active_users_today)}</b>\n\n"    
+                
+            f"<b>Activity (All Time):</b>\n"    
+            f"💹 Total Searches: <b>{total_searches}</b>\n"    
+            f"🏃‍♂️ Active Users (Week): <b>{len(active_users_week)}</b>\n"    
+            f"🔝 Top Search: <b>{most_common_search}</b>\n\n"    
+                
+            f"<b>Credits:</b>\n"    
+            f"💰 Total Credits in System: <b>{sum(user.get('credits', 0) for user in user_data.values())}</b>\n"    
+            f"🎁 Available in Codes: <b>{total_credits_in_codes}</b>"    
+        )    
+        await callback.message.answer(stats_message, reply_markup=get_admin_keyboard(), parse_mode="HTML")
+
     elif data == 'admin_toggle_freemode':
         new_status = not is_free_mode_active()
         set_free_mode(new_status)
         await callback.answer(f"✅ Free Mode has been {'ENABLED' if new_status else 'DISABLED'}.", show_alert=True)
-        await callback.message.edit_reply_markup(reply_markup=get_admin_keyboard())
+        await callback.message.answer("👑 Admin Panel", reply_markup=get_admin_keyboard())
+
     elif data == 'admin_referral_stats':
-        # Keep the same referral stats function
-        pass
+        user_data = load_data(USER_DATA_FILE)
+
+        total_referrals = sum(user.get('referral_count', 0) for user in user_data.values())    
+        users_with_referrals = sum(1 for user in user_data.values() if user.get('referral_count', 0) > 0)    
+        top_referrers = sorted([(uid, user.get('referral_count', 0)) for uid, user in user_data.items()],     
+                              key=lambda x: x[1], reverse=True)[:10]    
+        
+        stats_message = (    
+            f"📈 <b>Referral Statistics</b>\n\n"    
+            f"<b>Overall:</b>\n"    
+            f"🔗 Total Referrals: <b>{total_referrals}</b>\n"    
+            f"👥 Users with Referrals: <b>{users_with_referrals}</b>\n\n"    
+            f"<b>Top Referrers:</b>\n"    
+        )    
+        
+        for i, (uid, count) in enumerate(top_referrers, 1):    
+            stats_message += f"{i}. User {uid}: <b>{count}</b> referrals\n"    
+        
+        await callback.message.answer(stats_message, reply_markup=get_admin_keyboard(), parse_mode="HTML")
+
+    elif data == 'admin_view_all_users':
+        users = load_data(USER_DATA_FILE)
+        if not users:
+            await callback.answer("No users found.", show_alert=True)
+            return
+
+        user_list_text = "👥 **All Users**\n\n"    
+        for uid, udata in users.items():    
+            premium_users = load_data(PREMIUM_USERS_FILE)    
+            premium_status = "⭐" if int(uid) in premium_users else ""    
+            
+            if "premium_until" in udata:    
+                premium_until = datetime.fromisoformat(udata["premium_until"])    
+                if datetime.now() < premium_until:    
+                    time_left = premium_until - datetime.now()    
+                    hours_left = int(time_left.total_seconds() / 3600)    
+                    premium_status = f"⭐({hours_left}h)"    
+                
+            referral_count = udata.get('referral_count', 0)    
+            ref_status = f"🔗{referral_count}" if referral_count > 0 else ""    
+            
+            user_list_text += f"`{uid}` - Credits: {udata.get('credits', 0)} {premium_status} {ref_status}\n"    
+        
+        if len(user_list_text) > 4000:    
+            with open("all_users.txt", "w") as f:    
+                f.write(user_list_text)    
+            await bot.send_document(chat_id=callback.from_user.id, document=InputFile("all_users.txt"), caption="User list is too long.")    
+            os.remove("all_users.txt")    
+        else:    
+            await callback.message.answer(user_list_text, reply_markup=get_admin_keyboard(), parse_mode='Markdown')
+
+    elif data == 'admin_view_blocked':
+        blocked = load_data(BANNED_USERS_FILE)
+        if not blocked:
+            await callback.answer("No blocked users.", show_alert=True)
+            return
+
+        text = "🚫 **Blocked Users**\n\n`" + '`\n`'.join(map(str, blocked)) + '`'    
+        await callback.message.answer(text, reply_markup=get_admin_keyboard(), parse_mode='Markdown')
+
+    elif data == 'admin_view_premium':
+        premium = load_data(PREMIUM_USERS_FILE)
+        user_data = load_data(USER_DATA_FILE)
+
+        if not premium:    
+            text = "⭐ **Premium Users**\n\nNo permanent premium users."    
+        else:    
+            text = "⭐ **Permanent Premium Users**\n\n`" + '`\n`'.join(map(str, premium)) + '`'    
+        
+        temp_premium = []    
+        for uid, udata in user_data.items():    
+            if "premium_until" in udata:    
+                premium_until = datetime.fromisoformat(udata["premium_until"])    
+                if datetime.now() < premium_until:    
+                    time_left = premium_until - datetime.now()    
+                    hours_left = int(time_left.total_seconds() / 3600)    
+                    temp_premium.append(f"{uid} ({hours_left}h)")    
+        
+        if temp_premium:    
+            text += f"\n\n🕒 **Temporary Premium Users**\n\n" + "\n".join(temp_premium)    
+        
+        await callback.message.answer(text, reply_markup=get_admin_keyboard(), parse_mode='Markdown')
+
+    elif data == 'admin_gen_code':
+        await state.set_state(AdminStates.awaiting_gen_code)
+        await callback.message.answer("🎫 Send credits and uses separated by space (e.g., 100 5 for 100 credits with 5 uses)")
+
     else:
         prompts = {
             'admin_add_credits': (AdminStates.awaiting_add_credit, "➡️ Send the User ID and Amount, separated by a space (e.g., 12345678 100)."),
@@ -1952,7 +2103,6 @@ async def handle_admin_callback(callback: CallbackQuery, state: FSMContext):
             'admin_broadcast': (AdminStates.awaiting_broadcast, "➡️ Send the message you want to broadcast (supports HTML)."),
             'admin_ban_user': (AdminStates.awaiting_ban_id, "➡️ Send the User ID to ban."),
             'admin_unban_user': (AdminStates.awaiting_unban_id, "➡️ Send the User ID to unban."),
-            'admin_gen_code': (AdminStates.awaiting_gen_code, "🎫 Send credits and uses separated by space (e.g., 100 5 for 100 credits with 5 uses)")
         }
         if data in prompts:
             state_class, message_text = prompts[data]
@@ -1961,7 +2111,7 @@ async def handle_admin_callback(callback: CallbackQuery, state: FSMContext):
 
     await callback.answer()
 
-# Admin message handlers (keep the same as before)
+# Admin message handlers
 @dp.message(AdminStates.awaiting_add_credit)
 async def handle_admin_add_credit(message: Message, state: FSMContext):
     try:
@@ -1995,7 +2145,182 @@ async def handle_admin_add_credit(message: Message, state: FSMContext):
         await state.clear()
         await message.answer("👑 Admin Panel", reply_markup=get_admin_keyboard())
 
-# Other admin handlers remain the same...
+@dp.message(AdminStates.awaiting_remove_credit)
+async def handle_admin_remove_credit(message: Message, state: FSMContext):
+    try:
+        parts = message.text.split()
+        if len(parts) != 2:
+            raise ValueError("Invalid format")
+
+        target_id, amount = int(parts[0]), int(parts[1])
+        target_id_str = str(target_id)
+        user_data = load_data(USER_DATA_FILE)
+
+        if target_id_str not in user_data:
+            await message.answer("❌ User not found.")
+        else:
+            user_data[target_id_str]['credits'] = max(0, user_data[target_id_str]['credits'] - amount)
+            save_data(user_data, USER_DATA_FILE)
+            await message.answer(f"✅ Success! {amount} credits have been removed from user `{target_id}`.", parse_mode='Markdown')
+            log_user_action(message.from_user.id, "Admin Remove Credits", f"User {target_id}: -{amount} credits")
+
+    except (ValueError, IndexError):
+        await message.answer("❌ Invalid format. Please use: USER_ID AMOUNT")
+    finally:
+        await state.clear()
+        await message.answer("👑 Admin Panel", reply_markup=get_admin_keyboard())
+
+@dp.message(AdminStates.awaiting_premium_add)
+async def handle_admin_premium_add(message: Message, state: FSMContext):
+    try:
+        target_id = int(message.text.strip())
+        premium_users = load_data(PREMIUM_USERS_FILE)
+
+        if target_id in premium_users:
+            await message.answer(f"User {target_id} is already a premium member.", parse_mode='Markdown')
+        else:
+            premium_users.append(target_id)
+            user_data = load_data(USER_DATA_FILE)
+            if str(target_id) in user_data and "premium_until" in user_data[str(target_id)]:
+                del user_data[str(target_id)]["premium_until"]
+                save_data(user_data, USER_DATA_FILE)
+            
+            save_data(premium_users, PREMIUM_USERS_FILE)
+            await message.answer(f"⭐ User {target_id} has been added to permanent premium.", parse_mode='Markdown')
+            log_user_action(message.from_user.id, "Admin Add Premium", f"User {target_id}")
+
+    except ValueError:
+        await message.answer("❌ Invalid user ID.")
+    finally:
+        await state.clear()
+        await message.answer("👑 Admin Panel", reply_markup=get_admin_keyboard())
+
+@dp.message(AdminStates.awaiting_premium_remove)
+async def handle_admin_premium_remove(message: Message, state: FSMContext):
+    try:
+        target_id = int(message.text.strip())
+        premium_users = load_data(PREMIUM_USERS_FILE)
+
+        if target_id not in premium_users:
+            await message.answer(f"User {target_id} is not a permanent premium member.", parse_mode='Markdown')
+        else:
+            premium_users.remove(target_id)
+            save_data(premium_users, PREMIUM_USERS_FILE)
+            await message.answer(f"✅ User {target_id} has been removed from permanent premium.", parse_mode='Markdown')
+            log_user_action(message.from_user.id, "Admin Remove Premium", f"User {target_id}")
+
+    except ValueError:
+        await message.answer("❌ Invalid user ID.")
+    finally:
+        await state.clear()
+        await message.answer("👑 Admin Panel", reply_markup=get_admin_keyboard())
+
+@dp.message(AdminStates.awaiting_broadcast)
+async def handle_admin_broadcast(message: Message, state: FSMContext):
+    user_ids = list(load_data(USER_DATA_FILE).keys())
+    await message.answer(f"📢 Starting broadcast to {len(user_ids)} users...")
+
+    s_count, f_count = 0, 0
+    for uid in user_ids:
+        try:
+            await bot.send_message(chat_id=int(uid), text=message.text, parse_mode="HTML")
+            s_count += 1
+        except Exception:
+            f_count += 1
+        await asyncio.sleep(0.02)
+
+    await message.answer(f"Broadcast finished!\n\n✅ Sent: {s_count}\n❌ Failed: {f_count}")
+    log_user_action(message.from_user.id, "Admin Broadcast", f"Sent: {s_count}, Failed: {f_count}")
+    await state.clear()
+    await message.answer("👑 Admin Panel", reply_markup=get_admin_keyboard())
+
+@dp.message(AdminStates.awaiting_history_id)
+async def handle_admin_history_id(message: Message, state: FSMContext):
+    target_id_str = message.text.strip()
+    history = load_data(USER_HISTORY_FILE).get(target_id_str, [])
+
+    if not history:
+        await message.answer(f"No history found for user `{target_id_str}`.", parse_mode='Markdown')
+    else:
+        history_text = f"📜 History for User `{target_id_str}`\n\n"
+        for entry in history[:20]:
+            history_text += f"• `{entry['timestamp']}` - **{entry['action']}**: {entry['details']}\n"
+        if len(history) > 20:
+            history_text += f"\n... and {len(history) - 20} more entries"
+        await message.answer(history_text, parse_mode='Markdown')
+
+    await state.clear()
+    await message.answer("👑 Admin Panel", reply_markup=get_admin_keyboard())
+
+@dp.message(AdminStates.awaiting_ban_id)
+async def handle_admin_ban_id(message: Message, state: FSMContext):
+    try:
+        target_id = int(message.text.strip())
+        banned_users = load_data(BANNED_USERS_FILE)
+
+        if target_id in banned_users:
+            await message.answer(f"User {target_id} is already banned.", parse_mode='Markdown')
+        else:
+            banned_users.append(target_id)
+            save_data(banned_users, BANNED_USERS_FILE)
+            await message.answer(f"🚫 User {target_id} has been banned.", parse_mode='Markdown')
+            log_user_action(message.from_user.id, "Admin Ban User", f"User {target_id}")
+
+    except ValueError:
+        await message.answer("❌ Invalid user ID.")
+    finally:
+        await state.clear()
+        await message.answer("👑 Admin Panel", reply_markup=get_admin_keyboard())
+
+@dp.message(AdminStates.awaiting_unban_id)
+async def handle_admin_unban_id(message: Message, state: FSMContext):
+    try:
+        target_id = int(message.text.strip())
+        banned_users = load_data(BANNED_USERS_FILE)
+
+        if target_id not in banned_users:
+            await message.answer(f"User {target_id} is not banned.", parse_mode='Markdown')
+        else:
+            banned_users.remove(target_id)
+            save_data(banned_users, BANNED_USERS_FILE)
+            await message.answer(f"✅ User {target_id} has been unbanned.", parse_mode='Markdown')
+            log_user_action(message.from_user.id, "Admin Unban User", f"User {target_id}")
+
+    except ValueError:
+        await message.answer("❌ Invalid user ID.")
+    finally:
+        await state.clear()
+        await message.answer("👑 Admin Panel", reply_markup=get_admin_keyboard())
+
+@dp.message(AdminStates.awaiting_gen_code)
+async def handle_admin_gen_code(message: Message, state: FSMContext):
+    try:
+        parts = message.text.split()
+        if len(parts) != 2:
+            raise ValueError("Invalid format")
+
+        credits, uses = int(parts[0]), int(parts[1])
+
+        code = f"OSINT-{secrets.token_hex(2).upper()}-{secrets.token_hex(2).upper()}"
+        
+        redeem_codes = load_data(REDEEM_CODES_FILE)
+        redeem_codes[code] = {"credits": credits, "uses_left": uses}
+        save_data(redeem_codes, REDEEM_CODES_FILE)
+        
+        await message.answer(
+            f"✅ Code generated successfully!\n\n"
+            f"Code: `{code}`\n"
+            f"Credits: {credits}\n"
+            f"Uses: {uses}",
+            parse_mode='Markdown'
+        )
+        log_user_action(message.from_user.id, "Admin Generate Code", f"Code: {code}, Credits: {credits}, Uses: {uses}")
+
+    except (ValueError, IndexError):
+        await message.answer("❌ Invalid format. Please use: CREDITS USES")
+    finally:
+        await state.clear()
+        await message.answer("👑 Admin Panel", reply_markup=get_admin_keyboard())
 
 def initialize_data_files():
     for f in [USER_DATA_FILE, REDEEM_CODES_FILE, BANNED_USERS_FILE, PREMIUM_USERS_FILE, FREE_MODE_FILE, USER_HISTORY_FILE]:
