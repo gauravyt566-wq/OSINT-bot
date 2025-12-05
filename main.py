@@ -23,7 +23,7 @@ load_dotenv()
 
 # --- ⚙️ CONFIGURATION ---
 
-BOT_TOKEN = os.getenv("BOT_TOKEN", "7893988621:AAEDQ__Qxa4ShBcHKWMDGremR8s09_sraxU") # Using os.getenv is safer
+BOT_TOKEN = os.getenv("BOT_TOKEN", "7893988621:AAGuQkedXmpKln4I4J8TUPacGa5AA4PVYE0") # Using os.getenv is safer
 BOT_USERNAME = "@GG_B4N_Bot" # Hardcode or fetch via bot.get_me()
 
 # Your numeric Telegram User ID. Add multiple IDs separated by commas.
