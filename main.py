@@ -1,3 +1,42 @@
+[file name]: Screenshot_20251205_234736_Telegram.jpg
+[file content begin]
+# GG BANNIG BOT
+bot
+
+## All Users
+- User History
+- Broadcast
+  - Premium List
+- Block User
+  - Unblock User
+- Blocked List
+  - Bot Stats
+- Generate Code
+  - Free Mode (OFF)
+
+---
+
+### Referral Stats
+- Main Menu
+- Send me the 10-digit Indian mobile number.  
+  11:47 PM  
+
+7451010349  11:47 PM  
+
+An unexpected error occurred during Indian Phone Number search.  
+  11:47 PM  
+
+Send me the vehicle RC number (e.g., DL12AB1234) for Advanced Lookup.  
+  11:47 PM  
+
+GJ02AT0361  11:47 PM  
+
+An unexpected error occurred during Vehicle RC Advanced search.  
+  11:47 PM  
+
+
+[file content end]
+
 import asyncio
 import logging
 import json
@@ -1485,49 +1524,55 @@ async def generic_lookup(term: str, user_id: int, chat_id: int, api_endpoint: st
 
         data = response.json()
         
-        if data and isinstance(data, (dict, list)) and data.get("error") is None and data.get("msg") != "not found":
-            if isinstance(data, list):
-                formatted_data = json.dumps(data, indent=2, ensure_ascii=False)
-            elif data.get("status") == False or data.get("message") == "Not Found" or data.get("error"):
+        # FIXED: Handle different API response formats
+        if isinstance(data, dict):
+            # Check for error messages in various formats
+            if data.get("error") or data.get("msg") == "not found" or data.get("status") == False or data.get("message") == "Not Found":
                 await sent_message.edit_text(f"🤷 No details found for {display_name}: <code>{html.escape(term)}</code>." + get_info_footer(user_id, chat_type), parse_mode="HTML")
                 return
-
+            
+            # Check if data is actually empty
+            if not data or (len(data) == 1 and ("status" in data or "message" in data)):
+                await sent_message.edit_text(f"🤷 No details found for {display_name}: <code>{html.escape(term)}</code>." + get_info_footer(user_id, chat_type), parse_mode="HTML")
+                return
+        
+        # Format the response
+        if isinstance(data, list):
+            formatted_data = json.dumps(data, indent=2, ensure_ascii=False)
+        else:
             formatted_data = json.dumps(data, indent=2, ensure_ascii=False)
                 
-            if len(formatted_data) > 4000:
-                filename = f"{action_name.replace(' ', '_').lower()}_{term.replace('-', '')}.json"
-                with open(filename, 'w', encoding='utf-8') as f:
-                    f.write(formatted_data)
-                    
-                caption = f"🔍 <b>{display_name} Details for {term}</b>\n\nResponse too long, sent as file." + get_info_footer(user_id, chat_type)
+        if len(formatted_data) > 4000:
+            filename = f"{action_name.replace(' ', '_').lower()}_{term.replace('-', '')}.json"
+            with open(filename, 'w', encoding='utf-8') as f:
+                f.write(formatted_data)
                 
-                if chat_type in ["group", "supergroup"]:
-                    await bot.send_document(
-                        chat_id=chat_id,
-                        document=InputFile(filename),
-                        caption=caption,
-                        parse_mode="HTML",
-                        reply_markup=get_group_footer_keyboard()
-                    )
-                else:
-                    await bot.send_document(
-                        chat_id=chat_id,
-                        document=InputFile(filename),
-                        caption=caption,
-                        parse_mode="HTML"
-                    )
-                os.remove(filename)
+            caption = f"🔍 <b>{display_name} Details for {term}</b>\n\nResponse too long, sent as file." + get_info_footer(user_id, chat_type)
+            
+            if chat_type in ["group", "supergroup"]:
+                await bot.send_document(
+                    chat_id=chat_id,
+                    document=InputFile(filename),
+                    caption=caption,
+                    parse_mode="HTML",
+                    reply_markup=get_group_footer_keyboard()
+                )
             else:
-                result_text = f"🔍 <b>{display_name} Details for <code>{html.escape(term)}</code></b>\n\n<pre>{html.escape(formatted_data)}</pre>"
-                result_text += get_info_footer(user_id, chat_type)
-                
-                if chat_type in ["group", "supergroup"]:
-                    await sent_message.edit_text(result_text, parse_mode="HTML", reply_markup=get_group_footer_keyboard())
-                else:
-                    await sent_message.edit_text(result_text, parse_mode="HTML")
-
+                await bot.send_document(
+                    chat_id=chat_id,
+                    document=InputFile(filename),
+                    caption=caption,
+                    parse_mode="HTML"
+                )
+            os.remove(filename)
         else:
-            await sent_message.edit_text(f"🤷 No details found for {display_name}: <code>{html.escape(term)}</code>." + get_info_footer(user_id, chat_type), parse_mode="HTML")
+            result_text = f"🔍 <b>{display_name} Details for <code>{html.escape(term)}</code></b>\n\n<pre>{html.escape(formatted_data)}</pre>"
+            result_text += get_info_footer(user_id, chat_type)
+            
+            if chat_type in ["group", "supergroup"]:
+                await sent_message.edit_text(result_text, parse_mode="HTML", reply_markup=get_group_footer_keyboard())
+            else:
+                await sent_message.edit_text(result_text, parse_mode="HTML")
 
     except requests.exceptions.RequestException as e:
         logger.error(f"{action_name} API Error: {e}")
