@@ -7,3 +7,4 @@ ujson==5.9.0
 loguru==0.7.2
 apscheduler==3.10.4
 redis==5.0.1
+firebase-admin==6.5.0
