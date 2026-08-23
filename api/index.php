@@ -5,7 +5,7 @@ ini_set('display_errors', 0);
 $BOT_TOKEN = "8976716184:AAEqRWRNmVZ1hrAv8jbB5gvDi_ByczgPZU8";
 $BOT_USERNAME = "@GauravDetailsBot";
 $ADMIN_IDS = ["7255220723"];
-$FORCE_CHANNEL = "@ZephrexXx_Portal2";
+$FORCE_CHANNEL = "@Free_APIl";
 $LOG_CHANNEL = "@CyberTraceX_Logs";
 $API_KEY = "ZEPH-K2L1P8";
 $FAM_API_KEY = "FAM_49369415eefe95c67d87f1dd0879712c1baf5916f0fca390";
@@ -13,6 +13,9 @@ $FREE_CREDITS = 2;
 $REFER_BONUS = 2;
 $COOLDOWN = 3;
 $UPI_ID = "gaurav.intel@fam";
+
+$BLOB_STORE_ID = "store_Ta4VhdF8KGSpPEg1";
+$BLOB_READ_WRITE_TOKEN = "vercel_blob_rw_Ta4VhdF8KGSpPEg1_cHHrLuPshq1XNjUc9WaGPgKjV5ITPc";
 
 $CREDIT_PLANS = [
     "10" => ["price" => 50, "credits" => 10, "display" => "₹50 — 10 CREDITS"],
@@ -48,24 +51,49 @@ $FAM_VERIFY_API = "https://fampay.anujbots.xyz/verify.php";
 $SUCCESS_IMAGE = "https://t.me/ZephrexXx_media/21";
 $FAILED_IMAGE = "https://t.me/ZephrexXx_media/23";
 
-function initDatabase() {
-    $dbFile = '/tmp/bot_database.json';
-    if (!file_exists($dbFile)) {
-        $initialData = ['users' => [], 'history' => [], 'user_states' => [], 'payment_stats' => ['today_income' => 0, 'total_income' => 0, 'plan_counts' => [], 'today_date' => date('Y-m-d')]];
-        file_put_contents($dbFile, json_encode($initialData));
+function blob_get($key) {
+    global $BLOB_READ_WRITE_TOKEN;
+    $url = "https://blob.vercel-storage.com/$key";
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Authorization: Bearer ' . $BLOB_READ_WRITE_TOKEN]);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if ($httpCode === 200 && $response !== false) {
+        return json_decode($response, true);
     }
-    return $dbFile;
+    return null;
+}
+
+function blob_set($key, $value) {
+    global $BLOB_READ_WRITE_TOKEN;
+    $jsonValue = json_encode($value);
+    $url = "https://blob.vercel-storage.com/$key";
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PUT');
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $jsonValue);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Authorization: Bearer ' . $BLOB_READ_WRITE_TOKEN,
+        'Content-Type: application/json'
+    ]);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    curl_exec($ch);
+    curl_close($ch);
 }
 
 function loadDatabase() {
-    $dbFile = initDatabase();
-    $data = json_decode(file_get_contents($dbFile), true);
-    if (!$data) $data = ['users' => [], 'history' => [], 'user_states' => []];
+    $data = blob_get('bot-database');
+    if (!$data) $data = ['users' => [], 'history' => [], 'user_states' => [], 'payment_stats' => ['today_income' => 0, 'total_income' => 0, 'plan_counts' => [], 'today_date' => date('Y-m-d')]];
     return $data;
 }
 
 function saveDatabase($data) {
-    file_put_contents('/tmp/bot_database.json', json_encode($data));
+    blob_set('bot-database', $data);
 }
 
 function getUser($userId) {
@@ -409,11 +437,12 @@ function editMessageText($chatId, $messageId, $text) {
     return json_decode($response, true);
 }
 
-function deleteMessage($chatId, $messageId) {
+function editMessageMedia($chatId, $messageId, $mediaUrl, $caption, $replyMarkup = null) {
     global $BOT_TOKEN;
-    $postData = ['chat_id' => $chatId, 'message_id' => $messageId];
+    $postData = ['chat_id' => $chatId, 'message_id' => $messageId, 'media' => json_encode(['type' => 'photo', 'media' => $mediaUrl, 'caption' => $caption, 'parse_mode' => 'HTML'])];
+    if ($replyMarkup) $postData['reply_markup'] = json_encode($replyMarkup);
     $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, "https://api.telegram.org/bot$BOT_TOKEN/deleteMessage");
+    curl_setopt($ch, CURLOPT_URL, "https://api.telegram.org/bot$BOT_TOKEN/editMessageMedia");
     curl_setopt($ch, CURLOPT_POST, true);
     curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -557,8 +586,8 @@ function handleStart($chatId, $userId, $name, $username, $text = '') {
     if (!getUser($userId)) createUser($userId, $name, $username, $referredBy);
     $user = getUser($userId);
     $mention = "<a href=\"tg://user?id=$userId\">$name</a>";
-    $welcomeMsg = "✨ <b>𝐆ᴀᴜʀᴀᴠ 𝐃ᴇᴛᴀɪʟ𝐬 𝐁ᴏᴛ</b> ✨\n━━━━━━━━━━━━━━━━━━\n👋 Namaste $mention! Main aapki madad ke liye taiyar hoon.\n\n💳 <b>Available Credits:</b> {$user['credits']}\n━━━━━━━━━━━━━━━━━━\n\n👇 <b>HAMARI SERVICES</b> 👇\n\n🔎 <b>Personal Details:</b>\n☎️ <code>/num</code> ➜ Phone number ki jankari\n📄 <code>/aadhar</code> ➜ Aadhar card check\n👨‍👩‍👧 <code>/family</code> ➜ Aadhar se Family details\n💳 <code>/paytm</code> ➜ Paytm UPI se number\n🛢️ <code>/lpg</code> ➜ LPG Consumer details\n💳 <code>/pan</code> ➜ PAN card verification\n🏢 <code>/gst</code> ➜ GSTIN details\n📇 <code>/pangst</code> ➜ PAN to GST check\n\n🚙 <b>Device & Vehicle Details:</b>\n🏍 <code>/vehicle</code> ➜ RC details check\n🚗 <code>/vnum</code> ➜ RC to owner number\n🚔 <code>/challan</code> ➜ Vehicle challan check\n\n🏢 <b>Other Utilities:</b>\n🌐 <code>/ip</code> ➜ IP Address Tracker\n📍 <code>/pincode</code> ➜ Pincode check\n✈️ <code>/tg</code> ➜ Telegram UID to number\n📸 <code>/insta</code> ➜ Instagram profile\n🏦 <code>/ifsc</code> ➜ IFSC Code details\n🎮 <code>/ff</code> ➜ Free Fire UID details\n\n⚙️ <b>Settings & Earn:</b>\n👤 <code>/profile</code> ➜ Apna status dekhein\n💰 <code>/buy</code> ➜ Credits buy karein\n\n👨‍💻 <b>DEVELOPER:</b> @ZephrexXx";
-    $keyboard = ['inline_keyboard' => [[['text' => '💰 BUY CREDITS', 'callback_data' => 'buy_credits']], [['text' => '📞 CONTACT SUPPORT', 'url' => 'https://t.me/ZephrexXx']]]];
+    $welcomeMsg = "✨ <b>𝐆ᴀᴜʀᴀᴠ 𝐃ᴇᴛᴀɪʟ𝐬 𝐁ᴏᴛ</b> ✨\n━━━━━━━━━━━━━━━━━━\n👋 Namaste $mention! Main aapki madad ke liye taiyar hoon.\n\n💳 <b>Available Credits:</b> {$user['credits']}\n━━━━━━━━━━━━━━━━━━\n\n👇 <b>HAMARI SERVICES</b> 👇\n\n🔎 <b>Personal Details:</b>\n☎️ <code>/num</code> ➜ Phone number ki jankari\n📄 <code>/aadhar</code> ➜ Aadhar card check\n👨‍👩‍👧 <code>/family</code> ➜ Aadhar se Family details\n💳 <code>/paytm</code> ➜ Paytm UPI se number\n🛢️ <code>/lpg</code> ➜ LPG Consumer details\n💳 <code>/pan</code> ➜ PAN card verification\n🏢 <code>/gst</code> ➜ GSTIN details\n📇 <code>/pangst</code> ➜ PAN to GST check\n\n🚙 <b>Device & Vehicle Details:</b>\n🏍 <code>/vehicle</code> ➜ RC details check\n🚗 <code>/vnum</code> ➜ RC to owner number\n🚔 <code>/challan</code> ➜ Vehicle challan check\n\n🏢 <b>Other Utilities:</b>\n🌐 <code>/ip</code> ➜ IP Address Tracker\n📍 <code>/pincode</code> ➜ Pincode check\n✈️ <code>/tg</code> ➜ Telegram UID to number\n📸 <code>/insta</code> ➜ Instagram profile\n🏦 <code>/ifsc</code> ➜ IFSC Code details\n🎮 <code>/ff</code> ➜ Free Fire UID details\n\n⚙️ <b>Settings & Earn:</b>\n👤 <code>/profile</code> ➜ Apna status dekhein\n💰 <code>/buy</code> ➜ Credits buy karein\n\n👨‍💻 <b>DEVELOPER:</b> @ShivaCyber33";
+    $keyboard = ['inline_keyboard' => [[['text' => '💰 BUY CREDITS', 'callback_data' => 'buy_credits']], [['text' => '📞 CONTACT SUPPORT', 'url' => 'https://t.me/ShivaCyber33']]]];
     sendMessage($chatId, $welcomeMsg, $keyboard);
 }
 
@@ -592,7 +621,7 @@ function handleCallback($callbackQuery) {
     $data = $callbackQuery['data'];
     
     if ($data === 'check_join') {
-        if (checkForceJoin($userId)) { answerCallbackQuery($callbackId, '✅ Thanks for joining!'); sendMessage($chatId, '✅ Now you can use the bot!\n/start karein bot use karne ke liye.'); }
+        if (checkForceJoin($userId)) { answerCallbackQuery($callbackId, '✅ Thanks for joining!'); sendMessage($chatId, '✅ Now you can use the bot!'); sendMessage($chatId, '/start karein bot use karne ke liye.'); }
         else answerCallbackQuery($callbackId, '❌ Please join the channel first!', true);
         return;
     }
@@ -629,7 +658,7 @@ function handleCallback($callbackQuery) {
         if (!$result || ($result['status'] ?? '') !== 'success') {
             $failedCaption = "❌ <b>Deposit Not Found...</b>\n━━━━━━━━━━━━━━━━━━\n🆔 <b>Order Id:</b> <code>$orderId</code>\n\n<i>Don't Use Same Qr Code Again, Generate New Qr Code</i>";
             $keyboard = ['inline_keyboard' => [[['text' => '👀 REGENERATE QR', 'callback_data' => "regen_{$planKey}_$planUserId"]]]];
-            sendPhoto($chatId, $FAILED_IMAGE, $failedCaption, $keyboard);
+            editMessageMedia($chatId, $messageId, $FAILED_IMAGE, $failedCaption, $keyboard);
             return;
         }
         $paymentData = $result['data'] ?? [];
@@ -646,9 +675,33 @@ function handleCallback($callbackQuery) {
         $remainingCredits = $user ? $user['credits'] : '0';
         $successCaption = "✅ <b>PAYMENT SUCCESSFUL!</b>\n━━━━━━━━━━━━━━━━━━\n💰 <b>Amount:</b> ₹$amount\n👤 <b>Name:</b> $senderName\n🔢 <b>UTR:</b> <code>$utr</code>\n🧾 <b>Txn ID:</b> <code>$txnId</code>\n🕒 <b>Time:</b> $paymentTime\n━━━━━━━━━━━━━━━━━━\n🎁 <b>Credits Added:</b> $creditMsg\n💰 <b>Available Credits:</b> <code>$remainingCredits</code>";
         updateStats($planKey, $plan['price']);
-        sendPhoto($chatId, $SUCCESS_IMAGE, $successCaption);
+        editMessageMedia($chatId, $messageId, $SUCCESS_IMAGE, $successCaption);
         $logMsg = "🪙 <b>NEW QR PAYMENT</b>\n━━━━━━━━━━━━━━━━━━\n👤 <b>User:</b> <code>$planUserId</code>\n📦 <b>Plan:</b> {$plan['display']}\n💰 <b>Amount:</b> ₹$amount\n🔢 <b>UTR:</b> <code>$utr</code>\n🕒 <b>Time:</b> $paymentTime";
         sendMessage($LOG_CHANNEL, $logMsg);
+        return;
+    }
+    
+    if (strpos($data, 'regen_') === 0) {
+        $parts = explode('_', $data);
+        $planKey = $parts[1];
+        $planUserId = $parts[2];
+        if ((string)$userId !== $planUserId) { answerCallbackQuery($callbackId, 'This is not your QR!'); return; }
+        if (!isset($CREDIT_PLANS[$planKey])) { answerCallbackQuery($callbackId, 'Invalid plan!'); return; }
+        answerCallbackQuery($callbackId, 'Generating new QR code...');
+        $qrData = generateQrForPlan($planUserId, $planKey);
+        if (!$qrData) { sendMessage($chatId, '❌ Failed to generate QR code. Please try again.'); return; }
+        $plan = $CREDIT_PLANS[$planKey];
+        $caption = "💳 <b>QR PAYMENT</b>\n━━━━━━━━━━━━━━━━━━\n📦 <b>Plan:</b> <code>{$plan['display']}</code>\n💰 <b>Amount:</b> <code>₹{$qrData['amount']}</code>\n⏳ <b>Expires:</b> <code>{$qrData['expires_at']}</code>\n\n📲 <i>Scan QR code to pay</i>";
+        $keyboard = ['inline_keyboard' => [[['text' => '✅ VERIFY PAYMENT', 'callback_data' => "verify_{$qrData['order_id']}_{$planKey}_$planUserId"]], [['text' => '❌ CANCEL', 'callback_data' => "cancelqr_$planUserId"]]]];
+        editMessageMedia($chatId, $messageId, $qrData['qr_url'], $caption, $keyboard);
+        return;
+    }
+    
+    if (strpos($data, 'cancelqr_') === 0) {
+        $planUserId = substr($data, 9);
+        if ((string)$userId !== $planUserId) { answerCallbackQuery($callbackId, 'This is not your QR!'); return; }
+        answerCallbackQuery($callbackId, '❌ Payment Cancelled');
+        deleteMessage($chatId, $messageId);
         return;
     }
     
