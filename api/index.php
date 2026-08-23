@@ -51,18 +51,8 @@ $FAILED_IMAGE = "https://t.me/ZephrexXx_media/23";
 function initDatabase() {
     $dbFile = '/tmp/bot_database.json';
     if (!file_exists($dbFile)) {
-        $initialData = [
-            'users' => [],
-            'history' => [],
-            'user_states' => [],
-            'payment_stats' => [
-                'today_income' => 0,
-                'total_income' => 0,
-                'plan_counts' => [],
-                'today_date' => date('Y-m-d')
-            ]
-        ];
-        file_put_contents($dbFile, json_encode($initialData, JSON_PRETTY_PRINT));
+        $initialData = ['users' => [], 'history' => [], 'user_states' => [], 'payment_stats' => ['today_income' => 0, 'total_income' => 0, 'plan_counts' => [], 'today_date' => date('Y-m-d')]];
+        file_put_contents($dbFile, json_encode($initialData));
     }
     return $dbFile;
 }
@@ -70,15 +60,12 @@ function initDatabase() {
 function loadDatabase() {
     $dbFile = initDatabase();
     $data = json_decode(file_get_contents($dbFile), true);
-    if (!$data) {
-        $data = ['users' => [], 'history' => [], 'user_states' => []];
-    }
+    if (!$data) $data = ['users' => [], 'history' => [], 'user_states' => []];
     return $data;
 }
 
 function saveDatabase($data) {
-    $dbFile = '/tmp/bot_database.json';
-    file_put_contents($dbFile, json_encode($data, JSON_PRETTY_PRINT));
+    file_put_contents('/tmp/bot_database.json', json_encode($data));
 }
 
 function getUser($userId) {
@@ -91,22 +78,12 @@ function createUser($userId, $name, $username, $referredBy = null) {
     $db = loadDatabase();
     $userId = (string)$userId;
     if (!isset($db['users'][$userId])) {
-        $db['users'][$userId] = [
-            'user_id' => $userId,
-            'name' => $name,
-            'username' => $username,
-            'credits' => (string)$GLOBALS['FREE_CREDITS'],
-            'joined_date' => date('Y-m-d H:i:s'),
-            'banned' => 0,
-            'last_request' => 0,
-            'referral_code' => 'REF' . $userId,
-            'referred_by' => $referredBy
-        ];
+        $db['users'][$userId] = ['user_id' => $userId, 'name' => $name, 'username' => $username, 'credits' => (string)$GLOBALS['FREE_CREDITS'], 'joined_date' => date('Y-m-d H:i:s'), 'banned' => 0, 'last_request' => 0, 'referral_code' => 'REF' . $userId, 'referred_by' => $referredBy];
         if ($referredBy) {
             $referrer = getUser($referredBy);
             if ($referrer && $referrer['credits'] !== 'UNLIMITED') {
-                $currentCredits = is_numeric($referrer['credits']) ? (int)$referrer['credits'] : 0;
-                $db['users'][(string)$referredBy]['credits'] = (string)($currentCredits + $GLOBALS['REFER_BONUS']);
+                $current = is_numeric($referrer['credits']) ? (int)$referrer['credits'] : 0;
+                $db['users'][(string)$referredBy]['credits'] = (string)($current + $GLOBALS['REFER_BONUS']);
             }
         }
         saveDatabase($db);
@@ -118,12 +95,9 @@ function updateUserCredits($userId, $creditsToAdd) {
     $db = loadDatabase();
     $userId = (string)$userId;
     if (isset($db['users'][$userId])) {
-        if ($db['users'][$userId]['credits'] === 'UNLIMITED') {
-            return true;
-        }
-        $currentCredits = is_numeric($db['users'][$userId]['credits']) ? (int)$db['users'][$userId]['credits'] : 0;
-        $newCredits = $currentCredits + $creditsToAdd;
-        $db['users'][$userId]['credits'] = (string)$newCredits;
+        if ($db['users'][$userId]['credits'] === 'UNLIMITED') return true;
+        $current = is_numeric($db['users'][$userId]['credits']) ? (int)$db['users'][$userId]['credits'] : 0;
+        $db['users'][$userId]['credits'] = (string)($current + $creditsToAdd);
         saveDatabase($db);
         return true;
     }
@@ -132,32 +106,21 @@ function updateUserCredits($userId, $creditsToAdd) {
 
 function setUnlimitedCredits($userId) {
     $db = loadDatabase();
-    $userId = (string)$userId;
-    if (isset($db['users'][$userId])) {
-        $db['users'][$userId]['credits'] = 'UNLIMITED';
-        saveDatabase($db);
-    }
+    if (isset($db['users'][(string)$userId])) { $db['users'][(string)$userId]['credits'] = 'UNLIMITED'; saveDatabase($db); }
 }
 
 function removeUnlimitedCredits($userId) {
     $db = loadDatabase();
-    $userId = (string)$userId;
-    if (isset($db['users'][$userId])) {
-        $db['users'][$userId]['credits'] = '0';
-        saveDatabase($db);
-    }
+    if (isset($db['users'][(string)$userId])) { $db['users'][(string)$userId]['credits'] = '0'; saveDatabase($db); }
 }
 
 function deductCredit($userId) {
     $db = loadDatabase();
     $userId = (string)$userId;
     if (isset($db['users'][$userId])) {
-        if ($db['users'][$userId]['credits'] === 'UNLIMITED') {
-            return true;
-        }
+        if ($db['users'][$userId]['credits'] === 'UNLIMITED') return true;
         if (is_numeric($db['users'][$userId]['credits']) && (int)$db['users'][$userId]['credits'] > 0) {
-            $currentCredits = (int)$db['users'][$userId]['credits'];
-            $db['users'][$userId]['credits'] = (string)($currentCredits - 1);
+            $db['users'][$userId]['credits'] = (string)((int)$db['users'][$userId]['credits'] - 1);
             saveDatabase($db);
             return true;
         }
@@ -167,61 +130,29 @@ function deductCredit($userId) {
 
 function updateLastRequest($userId) {
     $db = loadDatabase();
-    $userId = (string)$userId;
-    if (isset($db['users'][$userId])) {
-        $db['users'][$userId]['last_request'] = time();
-        saveDatabase($db);
-    }
+    if (isset($db['users'][(string)$userId])) { $db['users'][(string)$userId]['last_request'] = time(); saveDatabase($db); }
 }
 
 function checkCooldown($userId) {
     $user = getUser($userId);
-    if ($user) {
-        $timeNow = time();
-        $lastReq = $user['last_request'];
-        if ($timeNow - $lastReq < $GLOBALS['COOLDOWN']) {
-            return $GLOBALS['COOLDOWN'] - ($timeNow - $lastReq);
-        }
-    }
+    if ($user) { $diff = time() - $user['last_request']; if ($diff < $GLOBALS['COOLDOWN']) return $GLOBALS['COOLDOWN'] - $diff; }
     return 0;
 }
 
-function isAdmin($userId) {
-    return in_array((string)$userId, $GLOBALS['ADMIN_IDS']);
-}
+function isAdmin($userId) { return in_array((string)$userId, $GLOBALS['ADMIN_IDS']); }
 
 function hasSufficientCredits($userId) {
     $user = getUser($userId);
     if (!$user) return false;
     if ($user['credits'] === 'UNLIMITED') return true;
-    if (is_numeric($user['credits']) && (int)$user['credits'] > 0) return true;
-    return false;
+    return is_numeric($user['credits']) && (int)$user['credits'] > 0;
 }
 
 function addHistory($userId, $action, $query, $resultCount) {
     $db = loadDatabase();
-    $db['history'][] = [
-        'user_id' => (string)$userId,
-        'action' => $action,
-        'query' => $query,
-        'result_count' => $resultCount,
-        'timestamp' => date('Y-m-d H:i:s')
-    ];
-    if (count($db['history']) > 1000) {
-        $db['history'] = array_slice($db['history'], -1000);
-    }
+    $db['history'][] = ['user_id' => (string)$userId, 'action' => $action, 'query' => $query, 'result_count' => $resultCount, 'timestamp' => date('Y-m-d H:i:s')];
+    if (count($db['history']) > 1000) $db['history'] = array_slice($db['history'], -1000);
     saveDatabase($db);
-}
-
-function getUserHistory($userId) {
-    $db = loadDatabase();
-    $history = [];
-    foreach ($db['history'] as $entry) {
-        if ($entry['user_id'] === (string)$userId) {
-            $history[] = $entry;
-        }
-    }
-    return array_slice(array_reverse($history), 0, 100);
 }
 
 function setUserState($userId, $action, $data = "") {
@@ -245,41 +176,26 @@ function updateStats($planKey = null, $amount = 0) {
     $db = loadDatabase();
     $today = date('Y-m-d');
     if (!isset($db['payment_stats']) || $db['payment_stats']['today_date'] !== $today) {
-        $db['payment_stats'] = [
-            'today_income' => 0,
-            'total_income' => isset($db['payment_stats']['total_income']) ? $db['payment_stats']['total_income'] : 0,
-            'plan_counts' => [],
-            'today_date' => $today
-        ];
+        $db['payment_stats'] = ['today_income' => 0, 'total_income' => $db['payment_stats']['total_income'] ?? 0, 'plan_counts' => [], 'today_date' => $today];
     }
     if ($planKey && $amount) {
         $db['payment_stats']['today_income'] += $amount;
-        $db['payment_stats']['total_income'] = isset($db['payment_stats']['total_income']) ? $db['payment_stats']['total_income'] + $amount : $amount;
-        if (!isset($db['payment_stats']['plan_counts'][$planKey])) {
-            $db['payment_stats']['plan_counts'][$planKey] = 0;
-        }
-        $db['payment_stats']['plan_counts'][$planKey]++;
+        $db['payment_stats']['total_income'] = ($db['payment_stats']['total_income'] ?? 0) + $amount;
+        $db['payment_stats']['plan_counts'][$planKey] = ($db['payment_stats']['plan_counts'][$planKey] ?? 0) + 1;
     }
     saveDatabase($db);
 }
 
 function getStats() {
     $db = loadDatabase();
-    return isset($db['payment_stats']) ? $db['payment_stats'] : ['today_income' => 0, 'total_income' => 0, 'plan_counts' => [], 'today_date' => date('Y-m-d')];
+    return $db['payment_stats'] ?? ['today_income' => 0, 'total_income' => 0, 'plan_counts' => [], 'today_date' => date('Y-m-d')];
 }
 
-function val($v) {
-    if ($v === null || $v === "" || $v === "null") {
-        return "N/A";
-    }
-    return (string)$v;
-}
+function val($v) { return ($v === null || $v === "" || $v === "null") ? "N/A" : (string)$v; }
 
 function formatAddress($addr) {
     if (!$addr) return "N/A";
-    $parts = array_filter(array_map('trim', explode("!", $addr)), function($p) {
-        return $p !== "" && $p !== "NA";
-    });
+    $parts = array_filter(array_map('trim', explode("!", $addr)), function($p) { return $p !== "" && $p !== "NA"; });
     return implode(", ", $parts);
 }
 
@@ -288,697 +204,141 @@ function is_valid_response($data) {
     if (is_array($data)) {
         if (isset($data['status']) && $data['status'] === false) return false;
         if (isset($data['data']) && empty($data['data'])) return false;
-        if (count($data) === 0) return false;
-        return true;
+        return count($data) > 0;
     }
-    if (is_string($data) && trim($data) === "") return false;
-    return true;
+    return is_string($data) && trim($data) !== "";
 }
 
 function has_actual_data($data) {
     if (is_array($data)) {
         if (isset($data['status']) && $data['status'] === false) return false;
-        $innerData = isset($data['data']) ? $data['data'] : $data;
-        if (is_array($innerData)) {
-            $results = isset($innerData['results']) ? $innerData['results'] : $innerData;
+        $inner = $data['data'] ?? $data;
+        if (is_array($inner)) {
+            $results = $inner['results'] ?? $inner;
             if (is_array($results) && count($results) > 0) return true;
-            foreach ($innerData as $key => $value) {
-                if (in_array($key, ['status', 'cached', 'response_time', 'status_code', 'http_status', 'Message', 'message'])) continue;
-                if (is_array($value)) {
-                    if (has_actual_data(['data' => $value])) return true;
-                } elseif ($value !== null && $value !== "" && $value !== "null" && $value !== "N/A") {
-                    return true;
-                }
+            foreach ($inner as $k => $v) {
+                if (in_array($k, ['status', 'cached', 'response_time', 'status_code', 'http_status', 'Message', 'message'])) continue;
+                if (is_array($v)) { if (has_actual_data(['data' => $v])) return true; }
+                elseif ($v !== null && $v !== "" && $v !== "null" && $v !== "N/A") return true;
             }
         }
-        return false;
     }
     return false;
 }
 
-function extract_data_for_type($lookupType, $response) {
-    $data = isset($response['data']) ? $response['data'] : $response;
-    switch ($lookupType) {
-        case 'mobile':
-            return isset($data['results']) ? $data['results'] : [];
-        case 'aadhaar':
-            return isset($data['results']) ? $data['results'] : [];
-        case 'family':
-            return is_array($data) && !isset($data['results']) ? $data : (isset($data['results']) ? $data['results'] : $data);
-        case 'lpg':
-            return isset($data['data']) ? $data['data'] : $data;
-        case 'paytm':
-            return isset($data['data']) ? $data['data'] : $data;
-        case 'pan':
-            return isset($data['results']) ? $data['results'] : $data;
-        case 'pangst':
-            return isset($data['data']) ? $data['data'] : $data;
-        case 'gst':
-            return isset($data['data']) ? $data['data'] : $data;
-        case 'vehicle':
-            return isset($data['response']) ? $data['response'] : $data;
-        case 'vnum':
-            return $data;
+function extract_data_for_type($type, $response) {
+    $data = $response['data'] ?? $response;
+    switch ($type) {
+        case 'mobile': case 'aadhaar': return $data['results'] ?? [];
+        case 'family': return is_array($data) && !isset($data['results']) ? $data : ($data['results'] ?? $data);
+        case 'lpg': case 'paytm': case 'pangst': case 'gst': return $data['data'] ?? $data;
+        case 'pan': return $data['results'] ?? $data;
+        case 'vehicle': return $data['response'] ?? $data;
+        case 'vnum': case 'telegram': case 'instagram': return $data;
         case 'challan':
-            $challans = isset($data['data']) && is_array($data['data']) ? $data['data'] : [];
-            $rcInfo = isset($data['rc_info']) && is_array($data['rc_info']) ? $data['rc_info'] : [];
-            $regNo = count($challans) > 0 && isset($challans[0]['reg_no']) ? $challans[0]['reg_no'] : null;
-            $ownerName = isset($rcInfo['owner_name']) ? $rcInfo['owner_name'] : '';
-            $vehicle = isset($rcInfo['maker_modal']) ? $rcInfo['maker_modal'] : '';
-            $pendingChallans = [];
+            $challans = is_array($data['data'] ?? null) ? $data['data'] : [];
+            $rcInfo = is_array($data['rc_info'] ?? null) ? $data['rc_info'] : [];
+            $pending = [];
             foreach ($challans as $c) {
                 if (!is_array($c)) continue;
-                $offenceList = isset($c['offece']) && is_array($c['offece']) ? $c['offece'] : [];
-                $offenceNames = [];
-                foreach ($offenceList as $o) {
-                    if (is_array($o) && isset($o['offence_name'])) {
-                        $offenceNames[] = $o['offence_name'];
-                    }
-                }
-                $pendingChallans[] = [
-                    'challan_no' => isset($c['challan_no']) ? $c['challan_no'] : '',
-                    'date' => isset($c['challan_date']) ? $c['challan_date'] : '',
-                    'amount' => isset($c['challan_amount']) ? $c['challan_amount'] : '',
-                    'state' => isset($c['state_code']) ? $c['state_code'] : '',
-                    'status' => isset($c['challan_status']) ? $c['challan_status'] : '',
-                    'violator_name' => isset($c['violator_name']) ? $c['violator_name'] : '',
-                    'offence' => $offenceNames
-                ];
+                $offences = [];
+                foreach (($c['offece'] ?? []) as $o) if (is_array($o) && isset($o['offence_name'])) $offences[] = $o['offence_name'];
+                $pending[] = ['challan_no' => $c['challan_no'] ?? '', 'date' => $c['challan_date'] ?? '', 'amount' => $c['challan_amount'] ?? '', 'state' => $c['state_code'] ?? '', 'status' => $c['challan_status'] ?? '', 'violator_name' => $c['violator_name'] ?? '', 'offence' => $offences];
             }
-            return [
-                'reg_no' => $regNo,
-                'owner_name' => $ownerName,
-                'vehicle' => $vehicle,
-                'insurance_upto' => '',
-                'pending_challans' => $pendingChallans
-            ];
-        case 'pincode':
-            return isset($data['PostOffice']) ? $data['PostOffice'] : [];
-        case 'ip':
-            return isset($data['results']) ? $data['results'] : $data;
-        case 'telegram':
-            return $data;
-        case 'instagram':
-            return $data;
-        case 'ifsc':
-            return isset($data['results']) ? $data['results'] : $data;
-        case 'freefire':
-            return isset($data['results']) ? $data['results'] : $data;
-        default:
-            return $data;
+            return ['reg_no' => $challans[0]['reg_no'] ?? null, 'owner_name' => $rcInfo['owner_name'] ?? '', 'vehicle' => $rcInfo['maker_modal'] ?? '', 'insurance_upto' => '', 'pending_challans' => $pending];
+        case 'pincode': return $data['PostOffice'] ?? [];
+        case 'ip': case 'ifsc': case 'freefire': return $data['results'] ?? $data;
+        default: return $data;
     }
 }
 
-function validateMobile($data) {
-    if (!is_array($data) || count($data) === 0) return false;
-    foreach ($data as $entry) {
-        if (!is_array($entry)) continue;
-        $mobile = isset($entry['mobile']) ? $entry['mobile'] : (isset($entry['MOBILE']) ? $entry['MOBILE'] : null);
-        if ($mobile && trim((string)$mobile) !== '' && trim((string)$mobile) !== 'null' && trim((string)$mobile) !== 'N/A') {
-            return true;
-        }
-    }
-    return false;
-}
-
-function validateFamily($data) {
-    if (!is_array($data) || count($data) === 0) return false;
-    $validCount = 0;
-    foreach ($data as $member) {
-        if (!is_array($member)) continue;
-        $memberName = isset($member['memberName']) ? $member['memberName'] : null;
-        if ($memberName && trim((string)$memberName) !== '' && trim((string)$memberName) !== 'null' && trim((string)$memberName) !== 'N/A' && trim((string)$memberName) !== 'None') {
-            $validCount++;
-        }
-    }
-    return $validCount > 0;
-}
-
-function validateAadhaar($data) {
-    if (is_array($data) && isset($data['id'])) {
-        $data = [$data];
-    }
-    if (!is_array($data) || count($data) === 0) return false;
-    foreach ($data as $entry) {
-        if (!is_array($entry)) return false;
-        if (!isset($entry['id']) || trim((string)$entry['id']) === '' || trim((string)$entry['id']) === 'null' || trim((string)$entry['id']) === 'N/A') return false;
-        if (!isset($entry['name']) || trim((string)$entry['name']) === '' || trim((string)$entry['name']) === 'null' || trim((string)$entry['name']) === 'N/A') return false;
-    }
-    return true;
-}
-
-function validateVehicle($data) {
-    if (!is_array($data)) return false;
-    if (!isset($data['regNo']) || trim((string)$data['regNo']) === '' || trim((string)$data['regNo']) === 'null' || trim((string)$data['regNo']) === 'N/A') return false;
-    if (!isset($data['vehicle']) || trim((string)$data['vehicle']) === '' || trim((string)$data['vehicle']) === 'null' || trim((string)$data['vehicle']) === 'N/A') return false;
-    return true;
-}
-
-function validateLpg($data) {
-    if (!is_array($data)) return false;
-    $pd = isset($data['pd']) && is_array($data['pd']) ? $data['pd'] : [];
-    $consumer = isset($pd['ConsumerDet']) && is_array($pd['ConsumerDet']) ? $pd['ConsumerDet'] : [];
-    if (!isset($consumer['ConsumerName']) || trim((string)$consumer['ConsumerName']) === '' || trim((string)$consumer['ConsumerName']) === 'null' || trim((string)$consumer['ConsumerName']) === 'N/A') return false;
-    if (!isset($consumer['ConsumerNo']) || trim((string)$consumer['ConsumerNo']) === '' || trim((string)$consumer['ConsumerNo']) === 'null' || trim((string)$consumer['ConsumerNo']) === 'N/A') return false;
-    return true;
-}
-
-function validatePaytm($data) {
-    if (!is_array($data)) return false;
-    if (!isset($data['name']) || trim((string)$data['name']) === '' || trim((string)$data['name']) === 'null' || trim((string)$data['name']) === 'N/A') return false;
-    if (!isset($data['phoneNumber']) || trim((string)$data['phoneNumber']) === '' || trim((string)$data['phoneNumber']) === 'null' || trim((string)$data['phoneNumber']) === 'N/A') return false;
-    return true;
-}
-
-function validateInstagram($data) {
-    if (!is_array($data)) return false;
-    $profile = isset($data['profile']) && is_array($data['profile']) ? $data['profile'] : [];
-    if (!isset($profile['username']) || trim((string)$profile['username']) === '' || trim((string)$profile['username']) === 'null' || trim((string)$profile['username']) === 'N/A') return false;
-    return true;
-}
-
-function validateFreefire($data) {
-    if (!is_array($data)) return false;
-    if (!isset($data['id']) || trim((string)$data['id']) === '' || trim((string)$data['id']) === 'null' || trim((string)$data['id']) === 'N/A') return false;
-    if (!isset($data['nickname']) || trim((string)$data['nickname']) === '' || trim((string)$data['nickname']) === 'null' || trim((string)$data['nickname']) === 'N/A') return false;
-    return true;
-}
-
-function validatePan($data) {
-    if (!is_array($data)) return false;
-    if (!isset($data['pan_number']) || trim((string)$data['pan_number']) === '' || trim((string)$data['pan_number']) === 'null' || trim((string)$data['pan_number']) === 'N/A') return false;
-    if (!isset($data['name']) || trim((string)$data['name']) === '' || trim((string)$data['name']) === 'null' || trim((string)$data['name']) === 'N/A') return false;
-    return true;
-}
-
-function validatePanToGst($data) {
-    if (!is_array($data)) return false;
-    if (!isset($data['pan']) || trim((string)$data['pan']) === '' || trim((string)$data['pan']) === 'null' || trim((string)$data['pan']) === 'N/A') return false;
-    $gstins = isset($data['gstins']) && is_array($data['gstins']) ? $data['gstins'] : [];
-    if (count($gstins) === 0) return false;
-    foreach ($gstins as $gstin) {
-        if (!is_array($gstin) || !isset($gstin['gstin']) || trim((string)$gstin['gstin']) === '' || trim((string)$gstin['gstin']) === 'null' || trim((string)$gstin['gstin']) === 'N/A') return false;
-    }
-    return true;
-}
-
-function validateIfsc($data) {
-    if (!is_array($data)) return false;
-    if (!isset($data['IFSC']) || trim((string)$data['IFSC']) === '' || trim((string)$data['IFSC']) === 'null' || trim((string)$data['IFSC']) === 'N/A') return false;
-    if (!isset($data['BANK']) || trim((string)$data['BANK']) === '' || trim((string)$data['BANK']) === 'null' || trim((string)$data['BANK']) === 'N/A') return false;
-    return true;
-}
-
-function validatePincode($data) {
-    if (!is_array($data) || count($data) === 0) return false;
-    $first = $data[0];
-    if (!is_array($first)) return false;
-    if (!isset($first['Pincode']) || trim((string)$first['Pincode']) === '' || trim((string)$first['Pincode']) === 'null' || trim((string)$first['Pincode']) === 'N/A') return false;
-    if (!isset($first['Name']) || trim((string)$first['Name']) === '' || trim((string)$first['Name']) === 'null' || trim((string)$first['Name']) === 'N/A') return false;
-    return true;
-}
-
-function validateTelegram($data) {
-    if (!is_array($data)) return false;
-    if (!isset($data['number']) || trim((string)$data['number']) === '' || trim((string)$data['number']) === 'null' || trim((string)$data['number']) === 'N/A') return false;
-    if (!isset($data['tg_id']) || trim((string)$data['tg_id']) === '' || trim((string)$data['tg_id']) === 'null' || trim((string)$data['tg_id']) === 'N/A') return false;
-    return true;
-}
-
-function validateGst($data) {
-    if (!is_array($data)) return false;
-    if (!isset($data['Gstin']) || trim((string)$data['Gstin']) === '' || trim((string)$data['Gstin']) === 'null' || trim((string)$data['Gstin']) === 'N/A') return false;
-    if (!isset($data['TradeName']) || trim((string)$data['TradeName']) === '' || trim((string)$data['TradeName']) === 'null' || trim((string)$data['TradeName']) === 'N/A') return false;
-    if (!isset($data['LegalName']) || trim((string)$data['LegalName']) === '' || trim((string)$data['LegalName']) === 'null' || trim((string)$data['LegalName']) === 'N/A') return false;
-    return true;
-}
-
-function validateVnum($data) {
-    if (!is_array($data)) return false;
-    if (!isset($data['mobile']) || trim((string)$data['mobile']) === '' || trim((string)$data['mobile']) === 'null' || trim((string)$data['mobile']) === 'N/A') return false;
-    if (!isset($data['vehicle']) || trim((string)$data['vehicle']) === '' || trim((string)$data['vehicle']) === 'null' || trim((string)$data['vehicle']) === 'N/A') return false;
-    return true;
-}
-
-function validateChallan($data) {
-    if (!is_array($data)) return false;
-    if (!isset($data['reg_no']) || trim((string)$data['reg_no']) === '' || trim((string)$data['reg_no']) === 'null' || trim((string)$data['reg_no']) === 'N/A') return false;
-    $challans = isset($data['pending_challans']) ? $data['pending_challans'] : [];
-    if (!is_array($challans) || count($challans) === 0) return false;
-    foreach ($challans as $challan) {
-        if (!is_array($challan)) return false;
-        if (!isset($challan['challan_no']) || trim((string)$challan['challan_no']) === '' || trim((string)$challan['challan_no']) === 'null' || trim((string)$challan['challan_no']) === 'N/A') return false;
-    }
-    return true;
-}
-
-function validateIp($data) {
-    if (!is_array($data)) return false;
-    if (!isset($data['query']) || trim((string)$data['query']) === '' || trim((string)$data['query']) === 'null' || trim((string)$data['query']) === 'N/A') return false;
-    if (!isset($data['country']) || trim((string)$data['country']) === '' || trim((string)$data['country']) === 'null' || trim((string)$data['country']) === 'N/A') return false;
-    return true;
-}
+function validateMobile($d) { if (!is_array($d) || count($d) === 0) return false; foreach ($d as $e) { if (!is_array($e)) continue; $m = $e['mobile'] ?? ($e['MOBILE'] ?? null); if ($m && !in_array(trim((string)$m), ['', 'null', 'N/A'])) return true; } return false; }
+function validateFamily($d) { if (!is_array($d) || count($d) === 0) return false; $c = 0; foreach ($d as $m) { if (!is_array($m)) continue; $n = $m['memberName'] ?? null; if ($n && !in_array(trim((string)$n), ['', 'null', 'N/A', 'None'])) $c++; } return $c > 0; }
+function validateAadhaar($d) { if (is_array($d) && isset($d['id'])) $d = [$d]; if (!is_array($d) || count($d) === 0) return false; foreach ($d as $e) { if (!is_array($e) || !isset($e['id']) || in_array(trim((string)$e['id']), ['', 'null', 'N/A']) || !isset($e['name']) || in_array(trim((string)$e['name']), ['', 'null', 'N/A'])) return false; } return true; }
+function validateVehicle($d) { return is_array($d) && isset($d['regNo']) && !in_array(trim((string)$d['regNo']), ['', 'null', 'N/A']) && isset($d['vehicle']) && !in_array(trim((string)$d['vehicle']), ['', 'null', 'N/A']); }
+function validateLpg($d) { if (!is_array($d)) return false; $pd = $d['pd'] ?? []; $c = $pd['ConsumerDet'] ?? []; return isset($c['ConsumerName']) && !in_array(trim((string)$c['ConsumerName']), ['', 'null', 'N/A']) && isset($c['ConsumerNo']) && !in_array(trim((string)$c['ConsumerNo']), ['', 'null', 'N/A']); }
+function validatePaytm($d) { return is_array($d) && isset($d['name']) && !in_array(trim((string)$d['name']), ['', 'null', 'N/A']) && isset($d['phoneNumber']) && !in_array(trim((string)$d['phoneNumber']), ['', 'null', 'N/A']); }
+function validateInstagram($d) { if (!is_array($d)) return false; $p = $d['profile'] ?? []; return isset($p['username']) && !in_array(trim((string)$p['username']), ['', 'null', 'N/A']); }
+function validateFreefire($d) { return is_array($d) && isset($d['id']) && !in_array(trim((string)$d['id']), ['', 'null', 'N/A']) && isset($d['nickname']) && !in_array(trim((string)$d['nickname']), ['', 'null', 'N/A']); }
+function validatePan($d) { return is_array($d) && isset($d['pan_number']) && !in_array(trim((string)$d['pan_number']), ['', 'null', 'N/A']) && isset($d['name']) && !in_array(trim((string)$d['name']), ['', 'null', 'N/A']); }
+function validatePanToGst($d) { if (!is_array($d) || !isset($d['pan']) || in_array(trim((string)$d['pan']), ['', 'null', 'N/A'])) return false; $g = $d['gstins'] ?? []; if (!is_array($g) || count($g) === 0) return false; foreach ($g as $x) if (!is_array($x) || !isset($x['gstin']) || in_array(trim((string)$x['gstin']), ['', 'null', 'N/A'])) return false; return true; }
+function validateIfsc($d) { return is_array($d) && isset($d['IFSC']) && !in_array(trim((string)$d['IFSC']), ['', 'null', 'N/A']) && isset($d['BANK']) && !in_array(trim((string)$d['BANK']), ['', 'null', 'N/A']); }
+function validatePincode($d) { if (!is_array($d) || count($d) === 0) return false; $f = $d[0]; return is_array($f) && isset($f['Pincode']) && !in_array(trim((string)$f['Pincode']), ['', 'null', 'N/A']) && isset($f['Name']) && !in_array(trim((string)$f['Name']), ['', 'null', 'N/A']); }
+function validateTelegram($d) { return is_array($d) && isset($d['number']) && !in_array(trim((string)$d['number']), ['', 'null', 'N/A']) && isset($d['tg_id']) && !in_array(trim((string)$d['tg_id']), ['', 'null', 'N/A']); }
+function validateGst($d) { return is_array($d) && isset($d['Gstin']) && !in_array(trim((string)$d['Gstin']), ['', 'null', 'N/A']) && isset($d['TradeName']) && !in_array(trim((string)$d['TradeName']), ['', 'null', 'N/A']) && isset($d['LegalName']) && !in_array(trim((string)$d['LegalName']), ['', 'null', 'N/A']); }
+function validateVnum($d) { return is_array($d) && isset($d['mobile']) && !in_array(trim((string)$d['mobile']), ['', 'null', 'N/A']) && isset($d['vehicle']) && !in_array(trim((string)$d['vehicle']), ['', 'null', 'N/A']); }
+function validateChallan($d) { if (!is_array($d) || !isset($d['reg_no']) || in_array(trim((string)$d['reg_no']), ['', 'null', 'N/A'])) return false; $c = $d['pending_challans'] ?? []; if (!is_array($c) || count($c) === 0) return false; foreach ($c as $x) if (!is_array($x) || !isset($x['challan_no']) || in_array(trim((string)$x['challan_no']), ['', 'null', 'N/A'])) return false; return true; }
+function validateIp($d) { return is_array($d) && isset($d['query']) && !in_array(trim((string)$d['query']), ['', 'null', 'N/A']) && isset($d['country']) && !in_array(trim((string)$d['country']), ['', 'null', 'N/A']); }
 
 function formatLpg($data, $credits) {
-    $pd = isset($data['pd']) && is_array($data['pd']) ? $data['pd'] : [];
-    $consumer = isset($pd['ConsumerDet']) && is_array($pd['ConsumerDet']) ? $pd['ConsumerDet'] : [];
-    $consumerAddr = isset($consumer['ConsumerAddress']) && is_array($consumer['ConsumerAddress']) ? $consumer['ConsumerAddress'] : [];
-    $distributor = isset($pd['DistributorDet']) && is_array($pd['DistributorDet']) ? $pd['DistributorDet'] : [];
-    $asset = isset($pd['AssetDet']) && is_array($pd['AssetDet']) ? $pd['AssetDet'] : [];
-    $products = isset($asset['ProductDet']) && is_array($asset['ProductDet']) ? $asset['ProductDet'] : [];
-    
+    $pd = $data['pd'] ?? [];
+    $consumer = $pd['ConsumerDet'] ?? [];
+    $consumerAddr = $consumer['ConsumerAddress'] ?? [];
+    $distributor = $pd['DistributorDet'] ?? [];
+    $asset = $pd['AssetDet'] ?? [];
+    $products = $asset['ProductDet'] ?? [];
     $msg = "🛢️ <b>LPG CONSUMER INFORMATION</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n";
-    
     if (isset($consumer['ConsumerName'])) $msg .= "👤 <b>CONSUMER NAME:</b> <code>" . val($consumer['ConsumerName']) . "</code>\n";
     if (isset($consumer['ConsumerId'])) $msg .= "🆔 <b>CONSUMER ID:</b> <code>" . val($consumer['ConsumerId']) . "</code>\n";
     if (isset($consumer['ConsumerNo'])) $msg .= "🔢 <b>CONSUMER NO:</b> <code>" . val($consumer['ConsumerNo']) . "</code>\n";
     if (isset($consumer['ConsumerMobile'])) $msg .= "📞 <b>MOBILE:</b> <code>" . val($consumer['ConsumerMobile']) . "</code>\n";
-    
     $msg .= "━━━━━━━━━━━━━━━━━━━━━━━\n";
-    
     if (isset($consumer['ConsumerStatus'])) $msg .= "📊 <b>STATUS:</b> <code>" . val($consumer['ConsumerStatus']) . "</code>\n";
-    if (isset($consumer['ConsumerSubStatus'])) $msg .= "📋 <b>SUB STATUS:</b> <code>" . val($consumer['ConsumerSubStatus']) . "</code>\n";
     if (isset($consumer['ConsumerCategory'])) $msg .= "🏷️ <b>CATEGORY:</b> <code>" . val($consumer['ConsumerCategory']) . "</code>\n";
     if (isset($consumer['ConsumerType'])) $msg .= "🔗 <b>TYPE:</b> <code>" . val($consumer['ConsumerType']) . "</code>\n";
-    if (isset($consumer['ConsumerRelType'])) $msg .= "👥 <b>RELATION TYPE:</b> <code>" . val($consumer['ConsumerRelType']) . "</code>\n";
-    if (isset($consumer['MIDueDate'])) $msg .= "📅 <b>MI DUE DATE:</b> <code>" . val($consumer['MIDueDate']) . "</code>\n";
-    if (isset($consumer['TubeChangeDate'])) $msg .= "🔄 <b>TUBE CHANGE DATE:</b> <code>" . val($consumer['TubeChangeDate']) . "</code>\n";
-    if (isset($consumer['TubeChangeDueDate'])) $msg .= "⏰ <b>TUBE CHANGE DUE:</b> <code>" . val($consumer['TubeChangeDueDate']) . "</code>\n";
-    if (isset($consumer['RelationshipUCMId'])) $msg .= "🔗 <b>RELATIONSHIP UCM ID:</b> <code>" . val($consumer['RelationshipUCMId']) . "</code>\n";
-    
-    $hasAddress = false;
-    foreach (['AddressLine1', 'AddressLine2', 'AddressLine3', 'City', 'District', 'State', 'StateCode', 'Pincode', 'DistrictCode', 'Country'] as $key) {
-        if (isset($consumerAddr[$key]) && $consumerAddr[$key] !== '' && $consumerAddr[$key] !== null) {
-            $hasAddress = true;
-            break;
-        }
-    }
-    
-    if ($hasAddress) {
+    $hasAddr = false;
+    foreach (['AddressLine1', 'AddressLine2', 'City', 'District', 'State', 'Pincode', 'Country'] as $k) if (isset($consumerAddr[$k]) && $consumerAddr[$k]) { $hasAddr = true; break; }
+    if ($hasAddr) {
         $msg .= "━━━━━━━━━━━━━━━━━━━━━━━\n🏠 <b>CONSUMER ADDRESS:</b>\n";
-        $addrFields = ['AddressLine1' => 'Line1', 'AddressLine2' => 'Line2', 'AddressLine3' => 'Line3', 'City' => 'City', 'District' => 'District', 'State' => 'State', 'StateCode' => 'State Code', 'Pincode' => 'Pincode', 'DistrictCode' => 'District Code', 'Country' => 'Country'];
-        foreach ($addrFields as $field => $label) {
-            if (isset($consumerAddr[$field]) && $consumerAddr[$field] !== '' && $consumerAddr[$field] !== null) {
-                $emoji = $field === 'City' ? '🏙️' : ($field === 'State' ? '🌐' : ($field === 'Pincode' ? '📮' : ($field === 'District' ? '🗺️' : ($field === 'Country' ? '🌍' : '📍'))));
-                $msg .= "   $emoji <b>$label:</b> <code>" . val($consumerAddr[$field]) . "</code>\n";
-            }
-        }
+        if (isset($consumerAddr['AddressLine1']) && $consumerAddr['AddressLine1']) $msg .= "📍 <b>Line1:</b> <code>" . val($consumerAddr['AddressLine1']) . "</code>\n";
+        if (isset($consumerAddr['City']) && $consumerAddr['City']) $msg .= "🏙️ <b>City:</b> <code>" . val($consumerAddr['City']) . "</code>\n";
+        if (isset($consumerAddr['District']) && $consumerAddr['District']) $msg .= "🗺️ <b>District:</b> <code>" . val($consumerAddr['District']) . "</code>\n";
+        if (isset($consumerAddr['State']) && $consumerAddr['State']) $msg .= "🌐 <b>State:</b> <code>" . val($consumerAddr['State']) . "</code>\n";
+        if (isset($consumerAddr['Pincode']) && $consumerAddr['Pincode']) $msg .= "📮 <b>Pincode:</b> <code>" . val($consumerAddr['Pincode']) . "</code>\n";
     }
-    
-    $hasDistributor = false;
-    foreach (['DistributorName', 'DistributorContact', 'DistributorCode', 'DistributorBacklogDays'] as $key) {
-        if (isset($distributor[$key]) && $distributor[$key] !== '' && $distributor[$key] !== null) {
-            $hasDistributor = true;
-            break;
-        }
-    }
-    
-    if ($hasDistributor) {
+    $hasDist = false;
+    foreach (['DistributorName', 'DistributorContact', 'DistributorCode'] as $k) if (isset($distributor[$k]) && $distributor[$k]) { $hasDist = true; break; }
+    if ($hasDist) {
         $msg .= "━━━━━━━━━━━━━━━━━━━━━━━\n🏢 <b>DISTRIBUTOR INFO:</b>\n";
-        if (isset($distributor['DistributorName']) && $distributor['DistributorName'] !== '') $msg .= "   🏬 <b>Name:</b> <code>" . val($distributor['DistributorName']) . "</code>\n";
-        if (isset($distributor['DistributorContact']) && $distributor['DistributorContact'] !== '') $msg .= "   📞 <b>Contact:</b> <code>" . val($distributor['DistributorContact']) . "</code>\n";
-        if (isset($distributor['DistributorCode']) && $distributor['DistributorCode'] !== '') $msg .= "   🔢 <b>Code:</b> <code>" . val($distributor['DistributorCode']) . "</code>\n";
-        if (isset($distributor['DistributorBacklogDays']) && $distributor['DistributorBacklogDays'] !== '') $msg .= "   📅 <b>Backlog Days:</b> <code>" . val($distributor['DistributorBacklogDays']) . "</code>\n";
+        if (isset($distributor['DistributorName']) && $distributor['DistributorName']) $msg .= "🏬 <b>Name:</b> <code>" . val($distributor['DistributorName']) . "</code>\n";
+        if (isset($distributor['DistributorContact']) && $distributor['DistributorContact']) $msg .= "📞 <b>Contact:</b> <code>" . val($distributor['DistributorContact']) . "</code>\n";
+        if (isset($distributor['DistributorCode']) && $distributor['DistributorCode']) $msg .= "🔢 <b>Code:</b> <code>" . val($distributor['DistributorCode']) . "</code>\n";
     }
-    
     if (count($products) > 0) {
         $msg .= "━━━━━━━━━━━━━━━━━━━━━━━\n🛒 <b>PRODUCTS:</b>\n";
         foreach ($products as $p) {
             if (!is_array($p)) continue;
-            $priceDet = isset($p['ProductPriceDet']) && is_array($p['ProductPriceDet']) ? $p['ProductPriceDet'] : [];
-            if (isset($p['ProductName']) && $p['ProductName'] !== '') $msg .= "   📦 <b>Product:</b> <code>" . val($p['ProductName']) . "</code>\n";
-            if (isset($p['ProductCode']) && $p['ProductCode'] !== '') $msg .= "   🏷️ <b>Product Code:</b> <code>" . val($p['ProductCode']) . "</code>\n";
-            if (isset($p['Quantity']) && $p['Quantity'] !== '') $msg .= "   🔢 <b>Quantity:</b> <code>" . val($p['Quantity']) . "</code>\n";
-            if (isset($p['UnitSize']) && $p['UnitSize'] !== '') $msg .= "   📏 <b>Unit Size:</b> <code>" . val($p['UnitSize']) . "</code>\n";
-            if (isset($priceDet['RSP']) && $priceDet['RSP'] !== '') $msg .= "   💰 <b>RSP:</b> <code>₹" . val($priceDet['RSP']) . "</code>\n";
-            if (isset($priceDet['SubsidyAmount']) && $priceDet['SubsidyAmount'] !== '') $msg .= "   💸 <b>Subsidy:</b> <code>₹" . val($priceDet['SubsidyAmount']) . "</code>\n";
-            $msg .= "   ─────────────────────\n";
+            if (isset($p['ProductName']) && $p['ProductName']) $msg .= "📦 <b>Product:</b> <code>" . val($p['ProductName']) . "</code>\n";
+            if (isset($p['Quantity']) && $p['Quantity']) $msg .= "🔢 <b>Quantity:</b> <code>" . val($p['Quantity']) . "</code>\n";
+            $msg .= "─────────────────────\n";
         }
     }
-    
     $msg .= "━━━━━━━━━━━━━━━━━━━━━━━\n";
-    if (isset($pd['ConsumedQuota']) && $pd['ConsumedQuota'] !== '') $msg .= "📦 <b>CONSUMED QUOTA:</b> <code>" . val($pd['ConsumedQuota']) . "</code>\n";
-    if (isset($pd['SchemeOpted']) && $pd['SchemeOpted'] !== '') $msg .= "💳 <b>SCHEME:</b> <code>" . val($pd['SchemeOpted']) . "</code>\n";
-    if (isset($pd['eKYCMessage']) && $pd['eKYCMessage'] !== '') $msg .= "🔐 <b>eKYC:</b> <code>" . val($pd['eKYCMessage']) . "</code>\n";
-    if (isset($pd['eKYCDate']) && $pd['eKYCDate'] !== '') $msg .= "📅 <b>eKYC DATE:</b> <code>" . val($pd['eKYCDate']) . "</code>\n";
-    if (isset($pd['AuthType']) && $pd['AuthType'] !== '') $msg .= "🔐 <b>AUTH TYPE:</b> <code>" . val($pd['AuthType']) . "</code>\n";
-    if (isset($pd['BookingEligible']) && $pd['BookingEligible'] !== '') $msg .= "✅ <b>BOOKING ELIGIBLE:</b> <code>" . val($pd['BookingEligible']) . "</code>\n";
-    if (isset($pd['PaymentEligible']) && $pd['PaymentEligible'] !== '') $msg .= "💰 <b>PAYMENT ELIGIBLE:</b> <code>" . val($pd['PaymentEligible']) . "</code>\n";
-    if (isset($pd['Source']) && $pd['Source'] !== '') $msg .= "📡 <b>SOURCE:</b> <code>" . val($pd['Source']) . "</code>\n";
-    if (isset($pd['TrackingId']) && $pd['TrackingId'] !== '') $msg .= "📋 <b>TRACKING ID:</b> <code>" . val($pd['TrackingId']) . "</code>\n";
-    
+    if (isset($pd['ConsumedQuota']) && $pd['ConsumedQuota']) $msg .= "📦 <b>CONSUMED QUOTA:</b> <code>" . val($pd['ConsumedQuota']) . "</code>\n";
+    if (isset($pd['SchemeOpted']) && $pd['SchemeOpted']) $msg .= "💳 <b>SCHEME:</b> <code>" . val($pd['SchemeOpted']) . "</code>\n";
+    if (isset($pd['eKYCMessage']) && $pd['eKYCMessage']) $msg .= "🔐 <b>eKYC:</b> <code>" . val($pd['eKYCMessage']) . "</code>\n";
+    if (isset($pd['Source']) && $pd['Source']) $msg .= "📡 <b>SOURCE:</b> <code>" . val($pd['Source']) . "</code>\n";
+    if (isset($pd['TrackingId']) && $pd['TrackingId']) $msg .= "📋 <b>TRACKING ID:</b> <code>" . val($pd['TrackingId']) . "</code>\n";
     $msg .= "━━━━━━━━━━━━━━━━━━━━━━━\n💰 <b>CREDITS REMAINING:</b> <code>$credits</code>";
     return $msg;
 }
 
-function formatPaytm($data, $credits) {
-    $profileUrl = isset($data['profileUrl']) ? $data['profileUrl'] : null;
-    $profileText = $profileUrl ? "<a href='$profileUrl'>Click Here</a>" : "N/A";
-    return "💳 <b>PAYTM USER INFORMATION</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n" .
-           "👤 <b>NAME:</b> <code>" . val($data['name'] ?? null) . "</code>\n" .
-           "📞 <b>PHONE NUMBER:</b> <code>" . val($data['phoneNumber'] ?? null) . "</code>\n" .
-           "🔗 <b>VPA:</b> <code>" . val($data['vpa'] ?? null) . "</code>\n" .
-           "━━━━━━━━━━━━━━━━━━━━━━━\n🖼️ <b>PROFILE PIC:</b> $profileText\n" .
-           "━━━━━━━━━━━━━━━━━━━━━━━\n💰 <b>CREDITS REMAINING:</b> <code>$credits</code>";
-}
-
-function formatFamily($dataList, $credits) {
-    $validMembers = [];
-    foreach ($dataList as $m) {
-        $memberName = isset($m['memberName']) ? $m['memberName'] : null;
-        if ($memberName && trim((string)$memberName) !== '' && trim((string)$memberName) !== 'null' && trim((string)$memberName) !== 'N/A' && trim((string)$memberName) !== 'None') {
-            $validMembers[] = $m;
-        }
-    }
-    
-    $total = count($validMembers);
-    $msg = "👨‍👩‍👧‍👦 <b>FAMILY INFORMATION</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n📊 <b>TOTAL MEMBERS:</b> <code>$total</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n";
-    
-    foreach ($validMembers as $i => $m) {
-        $headBadge = (isset($m['familyHead']) && $m['familyHead'] === 'Yes') ? ' 👑 (HEAD)' : '';
-        $msg .= "👤 <b>MEMBER #" . ($i + 1) . "$headBadge</b>\n" .
-                "📛 <b>Name:</b> <code>" . val($m['memberName'] ?? null) . "</code>\n" .
-                "🆔 <b>Ration Card ID:</b> <code>" . val($m['rcId'] ?? null) . "</code>\n" .
-                "🏪 <b>FPS ID:</b> <code>" . val($m['fpsId'] ?? null) . "</code>\n" .
-                "🔒 <b>Aadhaar:</b> <code>" . val($m['aadhaar'] ?? null) . "</code>\n" .
-                "🌐 <b>State:</b> <code>" . val($m['state'] ?? null) . "</code>\n" .
-                "🏙️ <b>District:</b> <code>" . val($m['district'] ?? null) . "</code>\n" .
-                "━━━━━━━━━━━━━━━━━━━━━━━\n";
-    }
-    
-    $msg .= "💰 <b>CREDITS REMAINING:</b> <code>$credits</code>";
-    return $msg;
-}
-
-function formatTelegram($d, $credits) {
-    return "📱 <b>TELEGRAM LOOKUP</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n" .
-           "📞 <b>NUMBER:</b> <code>" . val($d['number'] ?? null) . "</code>\n" .
-           "🔢 <b>COUNTRY CODE:</b> <code>" . val($d['country_code'] ?? null) . "</code>\n" .
-           "🌍 <b>COUNTRY:</b> <code>" . val($d['country'] ?? null) . "</code>\n" .
-           "━━━━━━━━━━━━━━━━━━━━━━━\n🆔 <b>TELEGRAM ID:</b> <code>" . val($d['tg_id'] ?? null) . "</code>\n" .
-           "━━━━━━━━━━━━━━━━━━━━━━━\n💰 <b>CREDITS REMAINING:</b> <code>$credits</code>";
-}
-
-function formatVnum($d, $credits) {
-    return "🚗 <b>VNUM INFORMATION</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n" .
-           "🔢 <b>VEHICLE NO:</b> <code>" . val($d['vehicle'] ?? null) . "</code>\n" .
-           "📞 <b>MOBILE:</b> <code>" . val($d['mobile'] ?? null) . "</code>\n" .
-           "━━━━━━━━━━━━━━━━━━━━━━━\n💰 <b>CREDITS REMAINING:</b> <code>$credits</code>";
-}
-
-function formatVehicle($d, $credits) {
-    $rto = isset($d['rtoData']) && is_array($d['rtoData']) ? $d['rtoData'] : [];
-    return "🚗 <b>VEHICLE INFORMATION</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n" .
-           "🔢 <b>VEHICLE NO:</b> <code>" . val($d['regNo'] ?? null) . "</code>\n" .
-           "👤 <b>OWNER NAME:</b> <code>" . val($d['owner'] ?? null) . "</code>\n" .
-           "👨‍👦 <b>FATHER NAME:</b> <code>" . val($d['ownerFatherName'] ?? null) . "</code>\n" .
-           "📅 <b>REG DATE:</b> <code>" . val($d['regDate'] ?? null) . "</code>\n" .
-           "🏛️ <b>RTO:</b> <code>" . val($d['regAuthority'] ?? null) . "</code>\n" .
-           "🎫 <b>RTO CODE:</b> <code>" . val($d['rtoCode'] ?? null) . "</code>\n" .
-           "📍 <b>RTO ID:</b> <code>" . val($d['rtoId'] ?? null) . "</code>\n" .
-           "━━━━━━━━━━━━━━━━━━━━━━━\n" .
-           "🏭 <b>MAKE:</b> <code>" . val($d['manufacturer'] ?? null) . "</code>\n" .
-           "🚘 <b>MODEL:</b> <code>" . val($d['vehicle'] ?? null) . "</code>\n" .
-           "🔧 <b>VARIANT:</b> <code>" . val($d['variant'] ?? null) . "</code>\n" .
-           "⛽ <b>FUEL:</b> <code>" . val($d['fuelType'] ?? null) . "</code>\n" .
-           "🚦 <b>TYPE:</b> <code>" . val($d['vehicleType'] ?? null) . "</code>\n" .
-           "📊 <b>CATEGORY:</b> <code>" . val($d['vehicleClass'] ?? null) . "</code>\n" .
-           "🏢 <b>COMMERCIAL:</b> <code>" . (isset($d['isCommercial']) && $d['isCommercial'] ? 'YES' : 'NO') . "</code>\n" .
-           "━━━━━━━━━━━━━━━━━━━━━━━\n" .
-           "🔩 <b>CHASSIS NO:</b> <code>" . val($d['chassis'] ?? null) . "</code>\n" .
-           "⚙️ <b>ENGINE NO:</b> <code>" . val($d['engine'] ?? null) . "</code>\n" .
-           "🔧 <b>CC:</b> <code>" . val($d['cubicCapacity'] ?? null) . "</code>\n" .
-           "💺 <b>SEAT CAPACITY:</b> <code>" . val($d['seatCapacity'] ?? null) . "</code>\n" .
-           "━━━━━━━━━━━━━━━━━━━━━━━\n" .
-           "🏭 <b>MFG YEAR:</b> <code>" . val($d['manufacturerYear'] ?? null) . "</code>\n" .
-           "🗓️ <b>MFG MONTH/YEAR:</b> <code>" . val($d['manufacturerMonthYear'] ?? null) . "</code>\n" .
-           "⏳ <b>VEHICLE AGE:</b> <code>" . val($d['vehicleAge'] ?? null) . "</code>\n" .
-           "━━━━━━━━━━━━━━━━━━━━━━━\n" .
-           "🏦 <b>FINANCER:</b> <code>" . val($d['financerName'] ?? null) . "</code>\n" .
-           "🛡️ <b>INSURER:</b> <code>" . val($d['insuranceCompanyName'] ?? null) . "</code>\n" .
-           "📄 <b>POLICY NO:</b> <code>" . val($d['insurancePolicyNumber'] ?? null) . "</code>\n" .
-           "📆 <b>POLICY EXPIRY:</b> <code>" . val($d['insuranceUpto'] ?? null) . "</code>\n" .
-           "❌ <b>POLICY EXPIRED:</b> <code>" . (isset($d['insuranceExpired']) && $d['insuranceExpired'] ? 'YES' : 'NO') . "</code>\n" .
-           "━━━━━━━━━━━━━━━━━━━━━━━\n" .
-           "🌫️ <b>PUCC NO:</b> <code>" . val($d['puccNumber'] ?? null) . "</code>\n" .
-           "📅 <b>PUCC VALID UPTO:</b> <code>" . val($d['puccValidUpto'] ?? null) . "</code>\n" .
-           "━━━━━━━━━━━━━━━━━━━━━━━\n" .
-           "🏛️ <b>RTO OFFICE:</b> <code>" . val($rto['rtoName'] ?? null) . "</code>\n" .
-           "🌐 <b>RTO STATE:</b> <code>" . val($rto['statename'] ?? null) . "</code>\n" .
-           "🟢 <b>RTO STATUS:</b> <code>" . (isset($rto['isActive']) && $rto['isActive'] ? 'ACTIVE' : 'INACTIVE') . "</code>\n" .
-           "━━━━━━━━━━━━━━━━━━━━━━━\n" .
-           "🏠 <b>PERMANENT ADDRESS:</b> <code>" . val($d['permAddress'] ?? null) . "</code>\n" .
-           "━━━━━━━━━━━━━━━━━━━━━━━\n" .
-           "📍 <b>PRESENT ADDRESS:</b> <code>" . val($d['presentAddress'] ?? null) . "</code>\n" .
-           "━━━━━━━━━━━━━━━━━━━━━━━\n💰 <b>CREDITS REMAINING:</b> <code>$credits</code>";
-}
-
-function formatMobile($dataList, $credits) {
-    $total = count($dataList);
-    $msg = "📱 <b>MOBILE INFORMATION</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n📊 <b>TOTAL RESULTS:</b> <code>$total</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n";
-    
-    foreach ($dataList as $i => $d) {
-        $mobile = $d['mobile'] ?? ($d['MOBILE'] ?? null);
-        $name = $d['name'] ?? ($d['NAME'] ?? null);
-        $fname = $d['fname'] ?? ($d['FNAME'] ?? null);
-        $address = $d['address'] ?? ($d['ADDRESS'] ?? null);
-        $alt = $d['alt'] ?? null;
-        
-        $msg .= "📋 <b>RESULT #" . ($i + 1) . "</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n" .
-                "📞 <b>MOBILE:</b> <code>" . val($mobile) . "</code>\n" .
-                "👤 <b>NAME:</b> <code>" . val($name) . "</code>\n" .
-                "👨‍👦 <b>FATHER NAME:</b> <code>" . val($fname) . "</code>\n";
-        if ($alt) $msg .= "📞 <b>ALT NUMBER:</b> <code>" . val($alt) . "</code>\n";
-        $msg .= "🆔 <b>AADHAAR NO:</b> <code>" . val($d['id'] ?? null) . "</code>\n" .
-                "📡 <b>CIRCLE:</b> <code>" . val($d['circle'] ?? null) . "</code>\n" .
-                "🏠 <b>ADDRESS:</b>\n<code>" . formatAddress($address) . "</code>\n" .
-                "━━━━━━━━━━━━━━━━━━━━━━━\n";
-    }
-    
-    $msg .= "💰 <b>CREDITS REMAINING:</b> <code>$credits</code>";
-    return $msg;
-}
-
-function formatInstagram($data, $credits) {
-    $p = isset($data['profile']) && is_array($data['profile']) ? $data['profile'] : [];
-    $pic = $p['profile_pic_url_hd'] ?? null;
-    $picText = $pic ? "<a href='$pic'>Click Here</a>" : "N/A";
-    return "📸 <b>INSTAGRAM INFORMATION</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n" .
-           "🆔 <b>ID:</b> <code>" . val($p['id'] ?? null) . "</code>\n" .
-           "👤 <b>USERNAME:</b> <code>@" . val($p['username'] ?? null) . "</code>\n" .
-           "📛 <b>FULL NAME:</b> <code>" . val($p['full_name'] ?? null) . "</code>\n" .
-           "📝 <b>BIO:</b> <code>" . val($p['biography'] ?? null) . "</code>\n" .
-           "━━━━━━━━━━━━━━━━━━━━━━━\n" .
-           "👥 <b>FOLLOWERS:</b> <code>" . val($p['followers'] ?? null) . "</code>\n" .
-           "➡️ <b>FOLLOWING:</b> <code>" . val($p['following'] ?? null) . "</code>\n" .
-           "🖼️ <b>POSTS:</b> <code>" . val($p['posts'] ?? null) . "</code>\n" .
-           "📅 <b>ACCOUNT CREATED:</b> <code>" . val($p['account_creation_year'] ?? null) . "</code>\n" .
-           "━━━━━━━━━━━━━━━━━━━━━━━\n" .
-           "🔒 <b>PRIVATE:</b> <code>" . (isset($p['is_private']) && $p['is_private'] ? 'YES' : 'NO') . "</code>\n" .
-           "✅ <b>VERIFIED:</b> <code>" . (isset($p['is_verified']) && $p['is_verified'] ? 'YES' : 'NO') . "</code>\n" .
-           "💼 <b>BUSINESS:</b> <code>" . (isset($p['is_business_account']) && $p['is_business_account'] ? 'YES' : 'NO') . "</code>\n" .
-           "🌟 <b>PROFESSIONAL:</b> <code>" . (isset($p['is_professional_account']) && $p['is_professional_account'] ? 'YES' : 'NO') . "</code>\n" .
-           "🏷️ <b>CATEGORY:</b> <code>" . val($p['category_name'] ?? null) . "</code>\n" .
-           "🔗 <b>EXTERNAL URL:</b> <code>" . val($p['external_url'] ?? null) . "</code>\n" .
-           "━━━━━━━━━━━━━━━━━━━━━━━\n" .
-           "🖼️ <b>PROFILE PIC:</b> $picText\n" .
-           "━━━━━━━━━━━━━━━━━━━━━━━\n" .
-           "🕒 <b>COLLECTED AT:</b> <code>" . val($data['collected_at'] ?? null) . "</code>\n" .
-           "━━━━━━━━━━━━━━━━━━━━━━━\n💰 <b>CREDITS REMAINING:</b> <code>$credits</code>";
-}
-
-function formatFreefire($data, $credits) {
-    return "🎮 <b>FREE FIRE PROFILE</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n" .
-           "🆔 <b>UID:</b> <code>" . val($data['id'] ?? null) . "</code>\n" .
-           "👤 <b>NICKNAME:</b> <code>" . val($data['nickname'] ?? null) . "</code>\n" .
-           "🌍 <b>REGION:</b> <code>" . val($data['region'] ?? null) . "</code>\n" .
-           "━━━━━━━━━━━━━━━━━━━━━━━\n" .
-           "⭐ <b>LEVEL:</b> <code>" . val($data['level'] ?? null) . "</code>\n" .
-           "🔥 <b>EXPERIENCE XP:</b> <code>" . val($data['experience_xp'] ?? null) . "</code>\n" .
-           "🏆 <b>RANKED POINTS:</b> <code>" . val($data['ranked_points'] ?? null) . "</code>\n" .
-           "❤️ <b>LIKES:</b> <code>" . val($data['likes'] ?? null) . "</code>\n" .
-           "━━━━━━━━━━━━━━━━━━━━━━━\n" .
-           "💎 <b>PRIME:</b> <code>" . val($data['prime'] ?? null) . "</code>\n" .
-           "👑 <b>INFLUENCER:</b> <code>" . (isset($data['influencer']) && $data['influencer'] ? 'YES' : 'NO') . "</code>\n" .
-           "👗 <b>SKINS:</b> <code>" . val($data['skins_equipadas'] ?? null) . "</code>\n" .
-           "━━━━━━━━━━━━━━━━━━━━━━━\n" .
-           "📝 <b>BIO:</b> <code>" . val($data['signature_bio'] ?? null) . "</code>\n" .
-           "━━━━━━━━━━━━━━━━━━━━━━━\n" .
-           "🕒 <b>LAST LOGIN:</b> <code>" . val($data['last_login'] ?? null) . "</code>\n" .
-           "📅 <b>ACCOUNT CREATED:</b> <code>" . val($data['account_created'] ?? null) . "</code>\n" .
-           "🔄 <b>PROFILE UPDATED:</b> <code>" . val($data['profile_updated'] ?? null) . "</code>\n" .
-           "━━━━━━━━━━━━━━━━━━━━━━━\n" .
-           "🗓️ <b>FETCHED ON:</b> <code>" . val($data['date'] ?? null) . " " . val($data['time'] ?? null) . "</code>\n" .
-           "━━━━━━━━━━━━━━━━━━━━━━━\n💰 <b>CREDITS REMAINING:</b> <code>$credits</code>";
-}
-
-function formatPanDetail($d, $credits) {
-    $genderIcon = (isset($d['gender']) && $d['gender'] === 'Male') ? '👨' : '👩';
-    return "🪪 <b>PAN DETAIL INFORMATION</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n" .
-           "💳 <b>PAN NUMBER:</b> <code>" . val($d['pan_number'] ?? null) . "</code>\n" .
-           "📊 <b>PAN STATUS:</b> <code>" . val($d['pan_status'] ?? null) . "</code>\n" .
-           "✅ <b>IS VALID:</b> <code>" . (isset($d['is_valid']) && $d['is_valid'] ? 'YES' : 'NO') . "</code>\n" .
-           "🏷️ <b>CATEGORY:</b> <code>" . val($d['category'] ?? null) . "</code>\n" .
-           "━━━━━━━━━━━━━━━━━━━━━━━\n" .
-           "👤 <b>NAME:</b> <code>" . val($d['name'] ?? null) . "</code>\n" .
-           "🎂 <b>DOB:</b> <code>" . val($d['dob'] ?? null) . "</code>\n" .
-           "$genderIcon <b>GENDER:</b> <code>" . val($d['gender'] ?? null) . "</code>\n" .
-           "📞 <b>MOBILE NO:</b> <code>" . val($d['mobile_no'] ?? null) . "</code>\n" .
-           "━━━━━━━━━━━━━━━━━━━━━━━\n" .
-           "🔒 <b>AADHAAR NUMBER:</b> <code>" . val($d['aadhar_number'] ?? null) . "</code>\n" .
-           "🔗 <b>AADHAAR LINKED:</b> <code>" . (isset($d['aadhaar_linked']) && $d['aadhaar_linked'] ? '✅ YES' : '❌ NO') . "</code>\n" .
-           "━━━━━━━━━━━━━━━━━━━━━━━\n💰 <b>CREDITS REMAINING:</b> <code>$credits</code>";
-}
-
-function formatPanToGst($d, $credits) {
-    $gstins = isset($d['gstins']) && is_array($d['gstins']) ? $d['gstins'] : [];
-    $msg = "🧾 <b>PAN TO GST INFORMATION</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n" .
-           "💳 <b>PAN NUMBER:</b> <code>" . val($d['pan'] ?? null) . "</code>\n" .
-           "📊 <b>TOTAL GSTINs:</b> <code>" . val($d['total'] ?? null) . "</code>\n" .
-           "━━━━━━━━━━━━━━━━━━━━━━━\n🏢 <b>GSTIN LIST</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n";
-    foreach ($gstins as $i => $g) {
-        $stateText = isset($g['state']) && $g['state'] ? " — 📍 <i>{$g['state']}</i>" : "";
-        $msg .= "<b>#" . ($i + 1) . "</b> <code>" . val($g['gstin'] ?? null) . "</code>$stateText\n";
-    }
-    $msg .= "━━━━━━━━━━━━━━━━━━━━━━━\n💰 <b>CREDITS REMAINING:</b> <code>$credits</code>";
-    return $msg;
-}
-
-function formatIfsc($d, $credits) {
-    return "🏦 <b>IFSC / BANK INFORMATION</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n" .
-           "🏛️ <b>BANK:</b> <code>" . val($d['BANK'] ?? null) . "</code>\n" .
-           "🔤 <b>BANK CODE:</b> <code>" . val($d['BANKCODE'] ?? null) . "</code>\n" .
-           "🔢 <b>IFSC:</b> <code>" . val($d['IFSC'] ?? null) . "</code>\n" .
-           "🔢 <b>MICR:</b> <code>" . val($d['MICR'] ?? null) . "</code>\n" .
-           "🌐 <b>SWIFT:</b> <code>" . val($d['SWIFT'] ?? null) . "</code>\n" .
-           "━━━━━━━━━━━━━━━━━━━━━━━\n" .
-           "🏢 <b>BRANCH:</b> <code>" . val($d['BRANCH'] ?? null) . "</code>\n" .
-           "🏙️ <b>CITY:</b> <code>" . val($d['CITY'] ?? null) . "</code>\n" .
-           "📍 <b>CENTRE:</b> <code>" . val($d['CENTRE'] ?? null) . "</code>\n" .
-           "🗺️ <b>DISTRICT:</b> <code>" . val($d['DISTRICT'] ?? null) . "</code>\n" .
-           "🌐 <b>STATE:</b> <code>" . val($d['STATE'] ?? null) . "</code>\n" .
-           "🏳️ <b>ISO CODE:</b> <code>" . val($d['ISO3166'] ?? null) . "</code>\n" .
-           "📞 <b>CONTACT:</b> <code>" . ($d['CONTACT'] ?? 'N/A') . "</code>\n" .
-           "━━━━━━━━━━━━━━━━━━━━━━━\n" .
-           "🏠 <b>ADDRESS:</b> <code>" . val($d['ADDRESS'] ?? null) . "</code>\n" .
-           "━━━━━━━━━━━━━━━━━━━━━━━\n" .
-           "💳 <b>PAYMENT SERVICES</b>\n" .
-           "   ⚡ <b>UPI:</b>  <code>" . (isset($d['UPI']) && $d['UPI'] ? '✅ YES' : '❌ NO') . "</code>\n" .
-           "   🔄 <b>NEFT:</b> <code>" . (isset($d['NEFT']) && $d['NEFT'] ? '✅ YES' : '❌ NO') . "</code>\n" .
-           "   🚀 <b>RTGS:</b> <code>" . (isset($d['RTGS']) && $d['RTGS'] ? '✅ YES' : '❌ NO') . "</code>\n" .
-           "   📲 <b>IMPS:</b> <code>" . (isset($d['IMPS']) && $d['IMPS'] ? '✅ YES' : '❌ NO') . "</code>\n" .
-           "━━━━━━━━━━━━━━━━━━━━━━━\n💰 <b>CREDITS REMAINING:</b> <code>$credits</code>";
-}
-
-function formatPincode($offices, $credits) {
-    $first = $offices[0];
-    $msg = "📮 <b>PINCODE INFORMATION</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n" .
-           "📌 <b>PINCODE:</b> <code>" . val($first['Pincode'] ?? null) . "</code>\n" .
-           "🏙️ <b>DISTRICT:</b> <code>" . val($first['District'] ?? null) . "</code>\n" .
-           "🌐 <b>STATE:</b> <code>" . val($first['State'] ?? null) . "</code>\n" .
-           "🗺️ <b>REGION:</b> <code>" . val($first['Region'] ?? null) . "</code>\n" .
-           "📦 <b>DIVISION:</b> <code>" . val($first['Division'] ?? null) . "</code>\n" .
-           "⭕ <b>CIRCLE:</b> <code>" . val($first['Circle'] ?? null) . "</code>\n" .
-           "🧱 <b>BLOCK:</b> <code>" . val($first['Block'] ?? null) . "</code>\n" .
-           "🌍 <b>COUNTRY:</b> <code>" . val($first['Country'] ?? null) . "</code>\n" .
-           "━━━━━━━━━━━━━━━━━━━━━━━\n" .
-           "🏣 <b>POST OFFICES (" . count($offices) . ")</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n";
-    foreach ($offices as $i => $p) {
-        $msg .= "<b>#" . ($i + 1) . " " . val($p['Name'] ?? null) . "</b>\n" .
-                "   🏢 <b>Type:</b> <code>" . val($p['BranchType'] ?? null) . "</code>\n" .
-                "   🚚 <b>Delivery:</b> <code>" . val($p['DeliveryStatus'] ?? null) . "</code>\n" .
-                "─────────────────────\n";
-    }
-    $msg .= "💰 <b>CREDITS REMAINING:</b> <code>$credits</code>";
-    return $msg;
-}
-
-function formatGstDetail($d, $credits) {
-    return "🏢 <b>GST DETAIL INFORMATION</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n" .
-           "🔢 <b>GSTIN:</b> <code>" . val($d['Gstin'] ?? null) . "</code>\n" .
-           "🏷️ <b>TRADE NAME:</b> <code>" . val($d['TradeName'] ?? null) . "</code>\n" .
-           "📋 <b>LEGAL NAME:</b> <code>" . val($d['LegalName'] ?? null) . "</code>\n" .
-           "━━━━━━━━━━━━━━━━━━━━━━━\n" .
-           "📊 <b>TAXPAYER TYPE:</b> <code>" . val($d['TxpType'] ?? null) . "</code>\n" .
-           "🔓 <b>BLOCK STATUS:</b> <code>" . (isset($d['BlkStatus']) && $d['BlkStatus'] === 'U' ? '✅ UNBLOCKED' : '🚫 BLOCKED') . "</code>\n" .
-           "📅 <b>REG DATE:</b> <code>" . val($d['DtReg'] ?? null) . "</code>\n" .
-           "❌ <b>DEREG DATE:</b> <code>" . val($d['DtDReg'] ?? null) . "</code>\n" .
-           "━━━━━━━━━━━━━━━━━━━━━━━\n" .
-           "🏠 <b>ADDRESS</b>\n" .
-           "   🏢 <b>Building:</b> <code>" . ($d['AddrBnm'] ?? 'N/A') . "</code>\n" .
-           "   🔢 <b>Bldg No:</b> <code>" . ($d['AddrBno'] ?? 'N/A') . "</code>\n" .
-           "   🏬 <b>Floor:</b> <code>" . ($d['AddrFlno'] ?? 'N/A') . "</code>\n" .
-           "   🛣️ <b>Street:</b> <code>" . ($d['AddrSt'] ?? 'N/A') . "</code>\n" .
-           "   📍 <b>Location:</b> <code>" . ($d['AddrLoc'] ?? 'N/A') . "</code>\n" .
-           "   🗺️ <b>State Code:</b> <code>" . val($d['StateCode'] ?? null) . "</code>\n" .
-           "   📮 <b>PINCODE:</b> <code>" . val($d['AddrPncd'] ?? null) . "</code>\n" .
-           "━━━━━━━━━━━━━━━━━━━━━━━\n💰 <b>CREDITS REMAINING:</b> <code>$credits</code>";
-}
-
-function formatAadhaar($dataList, $credits) {
-    $msg = "🪪 <b>AADHAAR INFORMATION</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n📊 <b>TOTAL RESULTS:</b> <code>" . count($dataList) . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n";
-    foreach ($dataList as $i => $d) {
-        $msg .= "📋 <b>RESULT #" . ($i + 1) . "</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n" .
-                "👤 <b>NAME:</b> <code>" . val($d['name'] ?? null) . "</code>\n" .
-                "👨‍👦 <b>FATHER NAME:</b> <code>" . val($d['fname'] ?? null) . "</code>\n" .
-                "🆔 <b>AADHAAR ID:</b> <code>" . val($d['id'] ?? null) . "</code>\n" .
-                "📞 <b>MOBILE:</b> <code>" . val($d['mobile'] ?? null) . "</code>\n" .
-                "📡 <b>CIRCLE:</b> <code>" . val($d['circle'] ?? null) . "</code>\n" .
-                "🏠 <b>ADDRESS:</b>\n<code>" . formatAddress($d['address'] ?? '') . "</code>\n" .
-                "━━━━━━━━━━━━━━━━━━━━━━━\n";
-    }
-    $msg .= "💰 <b>CREDITS REMAINING:</b> <code>$credits</code>";
-    return $msg;
-}
-
-function formatChallan($d, $credits) {
-    $challans = isset($d['pending_challans']) ? $d['pending_challans'] : [];
-    $msg = "🚨 <b>CHALLAN INFORMATION</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n" .
-           "🔢 <b>REG NO:</b> <code>" . val($d['reg_no'] ?? null) . "</code>\n" .
-           "👤 <b>OWNER:</b> <code>" . val($d['owner_name'] ?? null) . "</code>\n" .
-           "🚘 <b>VEHICLE:</b> <code>" . val($d['vehicle'] ?? null) . "</code>\n" .
-           "━━━━━━━━━━━━━━━━━━━━━━━\n📋 <b>CHALLANS (" . count($challans) . ")</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n";
-    foreach ($challans as $i => $c) {
-        $offence = $c['offence'] ?? null;
-        if (is_array($offence)) {
-            $offenceText = "• " . implode("\n      • ", $offence);
-        } else {
-            $offenceText = val($offence);
-        }
-        $statusEmoji = (isset($c['status']) && $c['status'] === 'Pending') ? '🟡' : '🟢';
-        $msg .= "$statusEmoji <b>CHALLAN #" . ($i + 1) . "</b>\n" .
-                "   👤 <b>Violator:</b> <code>" . val($c['violator_name'] ?? null) . "</code>\n" .
-                "   🔢 <b>Challan No:</b> <code>" . val($c['challan_no'] ?? null) . "</code>\n" .
-                "   📅 <b>Date:</b> <code>" . val($c['date'] ?? null) . "</code>\n" .
-                "   💵 <b>Amount:</b> <code>₹" . val($c['amount'] ?? null) . "</code>\n" .
-                "   📊 <b>Status:</b> <code>" . val($c['status'] ?? null) . "</code>\n" .
-                "   🗺️ <b>State:</b> <code>" . val($c['state'] ?? null) . "</code>\n" .
-                "   🚫 <b>Offence:</b> <code>$offenceText</code>\n" .
-                "─────────────────────\n";
-    }
-    $msg .= "💰 <b>CREDITS REMAINING:</b> <code>$credits</code>";
-    return $msg;
-}
-
-function formatIp($d, $credits) {
-    return "🌐 <b>IP LOOKUP</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n" .
-           "🔍 <b>IP:</b> <code>" . val($d['query'] ?? null) . "</code>\n" .
-           "🏢 <b>ISP:</b> <code>" . val($d['isp'] ?? null) . "</code>\n" .
-           "🏛️ <b>ORG:</b> <code>" . val($d['org'] ?? null) . "</code>\n" .
-           "📡 <b>AS:</b> <code>" . val($d['as'] ?? null) . "</code>\n" .
-           "━━━━━━━━━━━━━━━━━━━━━━━\n" .
-           "🌍 <b>COUNTRY:</b> <code>" . val($d['country'] ?? null) . "</code>\n" .
-           "🏳️ <b>COUNTRY CODE:</b> <code>" . val($d['countryCode'] ?? null) . "</code>\n" .
-           "🗺️ <b>REGION:</b> <code>" . val($d['regionName'] ?? null) . "</code>\n" .
-           "🔤 <b>REGION CODE:</b> <code>" . val($d['region'] ?? null) . "</code>\n" .
-           "🏙️ <b>CITY:</b> <code>" . val($d['city'] ?? null) . "</code>\n" .
-           "📮 <b>ZIP:</b> <code>" . val($d['zip'] ?? null) . "</code>\n" .
-           "🕒 <b>TIMEZONE:</b> <code>" . val($d['timezone'] ?? null) . "</code>\n" .
-           "━━━━━━━━━━━━━━━━━━━━━━━\n" .
-           "📍 <b>LATITUDE:</b> <code>" . val($d['lat'] ?? null) . "</code>\n" .
-           "📍 <b>LONGITUDE:</b> <code>" . val($d['lon'] ?? null) . "</code>\n" .
-           "━━━━━━━━━━━━━━━━━━━━━━━\n💰 <b>CREDITS REMAINING:</b> <code>$credits</code>";
-}
+function formatPaytm($d, $c) { $p = $d['profileUrl'] ?? null; $pt = $p ? "<a href='$p'>Click Here</a>" : "N/A"; return "💳 <b>PAYTM USER INFORMATION</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n👤 <b>NAME:</b> <code>" . val($d['name'] ?? null) . "</code>\n📞 <b>PHONE NUMBER:</b> <code>" . val($d['phoneNumber'] ?? null) . "</code>\n🔗 <b>VPA:</b> <code>" . val($d['vpa'] ?? null) . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n🖼️ <b>PROFILE PIC:</b> $pt\n━━━━━━━━━━━━━━━━━━━━━━━\n💰 <b>CREDITS REMAINING:</b> <code>$c</code>"; }
+function formatFamily($dl, $c) { $vm = []; foreach ($dl as $m) { $n = $m['memberName'] ?? null; if ($n && !in_array(trim((string)$n), ['', 'null', 'N/A', 'None'])) $vm[] = $m; } $msg = "👨‍👩‍👧‍👦 <b>FAMILY INFORMATION</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n📊 <b>TOTAL MEMBERS:</b> <code>" . count($vm) . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n"; foreach ($vm as $i => $m) { $hb = ($m['familyHead'] ?? '') === 'Yes' ? ' 👑 (HEAD)' : ''; $msg .= "👤 <b>MEMBER #" . ($i + 1) . "$hb</b>\n📛 <b>Name:</b> <code>" . val($m['memberName'] ?? null) . "</code>\n🆔 <b>Ration Card ID:</b> <code>" . val($m['rcId'] ?? null) . "</code>\n🏪 <b>FPS ID:</b> <code>" . val($m['fpsId'] ?? null) . "</code>\n🔒 <b>Aadhaar:</b> <code>" . val($m['aadhaar'] ?? null) . "</code>\n🌐 <b>State:</b> <code>" . val($m['state'] ?? null) . "</code>\n🏙️ <b>District:</b> <code>" . val($m['district'] ?? null) . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n"; } $msg .= "💰 <b>CREDITS REMAINING:</b> <code>$c</code>"; return $msg; }
+function formatTelegram($d, $c) { return "📱 <b>TELEGRAM LOOKUP</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n📞 <b>NUMBER:</b> <code>" . val($d['number'] ?? null) . "</code>\n🔢 <b>COUNTRY CODE:</b> <code>" . val($d['country_code'] ?? null) . "</code>\n🌍 <b>COUNTRY:</b> <code>" . val($d['country'] ?? null) . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n🆔 <b>TELEGRAM ID:</b> <code>" . val($d['tg_id'] ?? null) . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n💰 <b>CREDITS REMAINING:</b> <code>$c</code>"; }
+function formatVnum($d, $c) { return "🚗 <b>VNUM INFORMATION</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n🔢 <b>VEHICLE NO:</b> <code>" . val($d['vehicle'] ?? null) . "</code>\n📞 <b>MOBILE:</b> <code>" . val($d['mobile'] ?? null) . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n💰 <b>CREDITS REMAINING:</b> <code>$c</code>"; }
+function formatVehicle($d, $c) { $rto = $d['rtoData'] ?? []; return "🚗 <b>VEHICLE INFORMATION</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n🔢 <b>VEHICLE NO:</b> <code>" . val($d['regNo'] ?? null) . "</code>\n👤 <b>OWNER NAME:</b> <code>" . val($d['owner'] ?? null) . "</code>\n👨‍👦 <b>FATHER NAME:</b> <code>" . val($d['ownerFatherName'] ?? null) . "</code>\n📅 <b>REG DATE:</b> <code>" . val($d['regDate'] ?? null) . "</code>\n🏛️ <b>RTO:</b> <code>" . val($d['regAuthority'] ?? null) . "</code>\n🎫 <b>RTO CODE:</b> <code>" . val($d['rtoCode'] ?? null) . "</code>\n📍 <b>RTO ID:</b> <code>" . val($d['rtoId'] ?? null) . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n🏭 <b>MAKE:</b> <code>" . val($d['manufacturer'] ?? null) . "</code>\n🚘 <b>MODEL:</b> <code>" . val($d['vehicle'] ?? null) . "</code>\n🔧 <b>VARIANT:</b> <code>" . val($d['variant'] ?? null) . "</code>\n⛽ <b>FUEL:</b> <code>" . val($d['fuelType'] ?? null) . "</code>\n🚦 <b>TYPE:</b> <code>" . val($d['vehicleType'] ?? null) . "</code>\n📊 <b>CATEGORY:</b> <code>" . val($d['vehicleClass'] ?? null) . "</code>\n🏢 <b>COMMERCIAL:</b> <code>" . (isset($d['isCommercial']) && $d['isCommercial'] ? 'YES' : 'NO') . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n🔩 <b>CHASSIS NO:</b> <code>" . val($d['chassis'] ?? null) . "</code>\n⚙️ <b>ENGINE NO:</b> <code>" . val($d['engine'] ?? null) . "</code>\n🔧 <b>CC:</b> <code>" . val($d['cubicCapacity'] ?? null) . "</code>\n💺 <b>SEAT CAPACITY:</b> <code>" . val($d['seatCapacity'] ?? null) . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n🏭 <b>MFG YEAR:</b> <code>" . val($d['manufacturerYear'] ?? null) . "</code>\n🗓️ <b>MFG MONTH/YEAR:</b> <code>" . val($d['manufacturerMonthYear'] ?? null) . "</code>\n⏳ <b>VEHICLE AGE:</b> <code>" . val($d['vehicleAge'] ?? null) . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n🏦 <b>FINANCER:</b> <code>" . val($d['financerName'] ?? null) . "</code>\n🛡️ <b>INSURER:</b> <code>" . val($d['insuranceCompanyName'] ?? null) . "</code>\n📄 <b>POLICY NO:</b> <code>" . val($d['insurancePolicyNumber'] ?? null) . "</code>\n📆 <b>POLICY EXPIRY:</b> <code>" . val($d['insuranceUpto'] ?? null) . "</code>\n❌ <b>POLICY EXPIRED:</b> <code>" . (isset($d['insuranceExpired']) && $d['insuranceExpired'] ? 'YES' : 'NO') . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n🌫️ <b>PUCC NO:</b> <code>" . val($d['puccNumber'] ?? null) . "</code>\n📅 <b>PUCC VALID UPTO:</b> <code>" . val($d['puccValidUpto'] ?? null) . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n🏛️ <b>RTO OFFICE:</b> <code>" . val($rto['rtoName'] ?? null) . "</code>\n🌐 <b>RTO STATE:</b> <code>" . val($rto['statename'] ?? null) . "</code>\n🟢 <b>RTO STATUS:</b> <code>" . (isset($rto['isActive']) && $rto['isActive'] ? 'ACTIVE' : 'INACTIVE') . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n🏠 <b>PERMANENT ADDRESS:</b> <code>" . val($d['permAddress'] ?? null) . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n📍 <b>PRESENT ADDRESS:</b> <code>" . val($d['presentAddress'] ?? null) . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n💰 <b>CREDITS REMAINING:</b> <code>$c</code>"; }
+function formatMobile($dl, $c) { $msg = "📱 <b>MOBILE INFORMATION</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n📊 <b>TOTAL RESULTS:</b> <code>" . count($dl) . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n"; foreach ($dl as $i => $d) { $mobile = $d['mobile'] ?? ($d['MOBILE'] ?? null); $name = $d['name'] ?? ($d['NAME'] ?? null); $fname = $d['fname'] ?? ($d['FNAME'] ?? null); $address = $d['address'] ?? ($d['ADDRESS'] ?? null); $alt = $d['alt'] ?? null; $msg .= "📋 <b>RESULT #" . ($i + 1) . "</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n📞 <b>MOBILE:</b> <code>" . val($mobile) . "</code>\n👤 <b>NAME:</b> <code>" . val($name) . "</code>\n👨‍👦 <b>FATHER NAME:</b> <code>" . val($fname) . "</code>\n"; if ($alt) $msg .= "📞 <b>ALT NUMBER:</b> <code>" . val($alt) . "</code>\n"; $msg .= "🆔 <b>AADHAAR NO:</b> <code>" . val($d['id'] ?? null) . "</code>\n📡 <b>CIRCLE:</b> <code>" . val($d['circle'] ?? null) . "</code>\n🏠 <b>ADDRESS:</b>\n<code>" . formatAddress($address) . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n"; } $msg .= "💰 <b>CREDITS REMAINING:</b> <code>$c</code>"; return $msg; }
+function formatInstagram($d, $c) { $p = $d['profile'] ?? []; $pic = $p['profile_pic_url_hd'] ?? null; $pt = $pic ? "<a href='$pic'>Click Here</a>" : "N/A"; return "📸 <b>INSTAGRAM INFORMATION</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n🆔 <b>ID:</b> <code>" . val($p['id'] ?? null) . "</code>\n👤 <b>USERNAME:</b> <code>@" . val($p['username'] ?? null) . "</code>\n📛 <b>FULL NAME:</b> <code>" . val($p['full_name'] ?? null) . "</code>\n📝 <b>BIO:</b> <code>" . val($p['biography'] ?? null) . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n👥 <b>FOLLOWERS:</b> <code>" . val($p['followers'] ?? null) . "</code>\n➡️ <b>FOLLOWING:</b> <code>" . val($p['following'] ?? null) . "</code>\n🖼️ <b>POSTS:</b> <code>" . val($p['posts'] ?? null) . "</code>\n📅 <b>ACCOUNT CREATED:</b> <code>" . val($p['account_creation_year'] ?? null) . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n🔒 <b>PRIVATE:</b> <code>" . (isset($p['is_private']) && $p['is_private'] ? 'YES' : 'NO') . "</code>\n✅ <b>VERIFIED:</b> <code>" . (isset($p['is_verified']) && $p['is_verified'] ? 'YES' : 'NO') . "</code>\n💼 <b>BUSINESS:</b> <code>" . (isset($p['is_business_account']) && $p['is_business_account'] ? 'YES' : 'NO') . "</code>\n🌟 <b>PROFESSIONAL:</b> <code>" . (isset($p['is_professional_account']) && $p['is_professional_account'] ? 'YES' : 'NO') . "</code>\n🏷️ <b>CATEGORY:</b> <code>" . val($p['category_name'] ?? null) . "</code>\n🔗 <b>EXTERNAL URL:</b> <code>" . val($p['external_url'] ?? null) . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n🖼️ <b>PROFILE PIC:</b> $pt\n━━━━━━━━━━━━━━━━━━━━━━━\n🕒 <b>COLLECTED AT:</b> <code>" . val($d['collected_at'] ?? null) . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n💰 <b>CREDITS REMAINING:</b> <code>$c</code>"; }
+function formatFreefire($d, $c) { return "🎮 <b>FREE FIRE PROFILE</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n🆔 <b>UID:</b> <code>" . val($d['id'] ?? null) . "</code>\n👤 <b>NICKNAME:</b> <code>" . val($d['nickname'] ?? null) . "</code>\n🌍 <b>REGION:</b> <code>" . val($d['region'] ?? null) . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n⭐ <b>LEVEL:</b> <code>" . val($d['level'] ?? null) . "</code>\n🔥 <b>EXPERIENCE XP:</b> <code>" . val($d['experience_xp'] ?? null) . "</code>\n🏆 <b>RANKED POINTS:</b> <code>" . val($d['ranked_points'] ?? null) . "</code>\n❤️ <b>LIKES:</b> <code>" . val($d['likes'] ?? null) . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n💎 <b>PRIME:</b> <code>" . val($d['prime'] ?? null) . "</code>\n👑 <b>INFLUENCER:</b> <code>" . (isset($d['influencer']) && $d['influencer'] ? 'YES' : 'NO') . "</code>\n👗 <b>SKINS:</b> <code>" . val($d['skins_equipadas'] ?? null) . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n📝 <b>BIO:</b> <code>" . val($d['signature_bio'] ?? null) . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n🕒 <b>LAST LOGIN:</b> <code>" . val($d['last_login'] ?? null) . "</code>\n📅 <b>ACCOUNT CREATED:</b> <code>" . val($d['account_created'] ?? null) . "</code>\n🔄 <b>PROFILE UPDATED:</b> <code>" . val($d['profile_updated'] ?? null) . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n🗓️ <b>FETCHED ON:</b> <code>" . val($d['date'] ?? null) . " " . val($d['time'] ?? null) . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n💰 <b>CREDITS REMAINING:</b> <code>$c</code>"; }
+function formatPanDetail($d, $c) { $g = ($d['gender'] ?? '') === 'Male' ? '👨' : '👩'; return "🪪 <b>PAN DETAIL INFORMATION</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n💳 <b>PAN NUMBER:</b> <code>" . val($d['pan_number'] ?? null) . "</code>\n📊 <b>PAN STATUS:</b> <code>" . val($d['pan_status'] ?? null) . "</code>\n✅ <b>IS VALID:</b> <code>" . (isset($d['is_valid']) && $d['is_valid'] ? 'YES' : 'NO') . "</code>\n🏷️ <b>CATEGORY:</b> <code>" . val($d['category'] ?? null) . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n👤 <b>NAME:</b> <code>" . val($d['name'] ?? null) . "</code>\n🎂 <b>DOB:</b> <code>" . val($d['dob'] ?? null) . "</code>\n$g <b>GENDER:</b> <code>" . val($d['gender'] ?? null) . "</code>\n📞 <b>MOBILE NO:</b> <code>" . val($d['mobile_no'] ?? null) . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n🔒 <b>AADHAAR NUMBER:</b> <code>" . val($d['aadhar_number'] ?? null) . "</code>\n🔗 <b>AADHAAR LINKED:</b> <code>" . (isset($d['aadhaar_linked']) && $d['aadhaar_linked'] ? '✅ YES' : '❌ NO') . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n💰 <b>CREDITS REMAINING:</b> <code>$c</code>"; }
+function formatPanToGst($d, $c) { $g = $d['gstins'] ?? []; $msg = "🧾 <b>PAN TO GST INFORMATION</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n💳 <b>PAN NUMBER:</b> <code>" . val($d['pan'] ?? null) . "</code>\n📊 <b>TOTAL GSTINs:</b> <code>" . val($d['total'] ?? null) . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n🏢 <b>GSTIN LIST</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n"; foreach ($g as $i => $x) { $st = isset($x['state']) && $x['state'] ? " — 📍 <i>{$x['state']}</i>" : ""; $msg .= "<b>#" . ($i + 1) . "</b> <code>" . val($x['gstin'] ?? null) . "</code>$st\n"; } $msg .= "━━━━━━━━━━━━━━━━━━━━━━━\n💰 <b>CREDITS REMAINING:</b> <code>$c</code>"; return $msg; }
+function formatIfsc($d, $c) { return "🏦 <b>IFSC / BANK INFORMATION</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n🏛️ <b>BANK:</b> <code>" . val($d['BANK'] ?? null) . "</code>\n🔤 <b>BANK CODE:</b> <code>" . val($d['BANKCODE'] ?? null) . "</code>\n🔢 <b>IFSC:</b> <code>" . val($d['IFSC'] ?? null) . "</code>\n🔢 <b>MICR:</b> <code>" . val($d['MICR'] ?? null) . "</code>\n🌐 <b>SWIFT:</b> <code>" . val($d['SWIFT'] ?? null) . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n🏢 <b>BRANCH:</b> <code>" . val($d['BRANCH'] ?? null) . "</code>\n🏙️ <b>CITY:</b> <code>" . val($d['CITY'] ?? null) . "</code>\n📍 <b>CENTRE:</b> <code>" . val($d['CENTRE'] ?? null) . "</code>\n🗺️ <b>DISTRICT:</b> <code>" . val($d['DISTRICT'] ?? null) . "</code>\n🌐 <b>STATE:</b> <code>" . val($d['STATE'] ?? null) . "</code>\n🏳️ <b>ISO CODE:</b> <code>" . val($d['ISO3166'] ?? null) . "</code>\n📞 <b>CONTACT:</b> <code>" . ($d['CONTACT'] ?? 'N/A') . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n🏠 <b>ADDRESS:</b> <code>" . val($d['ADDRESS'] ?? null) . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n💳 <b>PAYMENT SERVICES</b>\n⚡ <b>UPI:</b> <code>" . (isset($d['UPI']) && $d['UPI'] ? '✅ YES' : '❌ NO') . "</code>\n🔄 <b>NEFT:</b> <code>" . (isset($d['NEFT']) && $d['NEFT'] ? '✅ YES' : '❌ NO') . "</code>\n🚀 <b>RTGS:</b> <code>" . (isset($d['RTGS']) && $d['RTGS'] ? '✅ YES' : '❌ NO') . "</code>\n📲 <b>IMPS:</b> <code>" . (isset($d['IMPS']) && $d['IMPS'] ? '✅ YES' : '❌ NO') . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n💰 <b>CREDITS REMAINING:</b> <code>$c</code>"; }
+function formatPincode($o, $c) { $f = $o[0]; $msg = "📮 <b>PINCODE INFORMATION</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n📌 <b>PINCODE:</b> <code>" . val($f['Pincode'] ?? null) . "</code>\n🏙️ <b>DISTRICT:</b> <code>" . val($f['District'] ?? null) . "</code>\n🌐 <b>STATE:</b> <code>" . val($f['State'] ?? null) . "</code>\n🗺️ <b>REGION:</b> <code>" . val($f['Region'] ?? null) . "</code>\n📦 <b>DIVISION:</b> <code>" . val($f['Division'] ?? null) . "</code>\n⭕ <b>CIRCLE:</b> <code>" . val($f['Circle'] ?? null) . "</code>\n🧱 <b>BLOCK:</b> <code>" . val($f['Block'] ?? null) . "</code>\n🌍 <b>COUNTRY:</b> <code>" . val($f['Country'] ?? null) . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n🏣 <b>POST OFFICES (" . count($o) . ")</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n"; foreach ($o as $i => $p) { $msg .= "<b>#" . ($i + 1) . " " . val($p['Name'] ?? null) . "</b>\n🏢 <b>Type:</b> <code>" . val($p['BranchType'] ?? null) . "</code>\n🚚 <b>Delivery:</b> <code>" . val($p['DeliveryStatus'] ?? null) . "</code>\n─────────────────────\n"; } $msg .= "💰 <b>CREDITS REMAINING:</b> <code>$c</code>"; return $msg; }
+function formatGstDetail($d, $c) { return "🏢 <b>GST DETAIL INFORMATION</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n🔢 <b>GSTIN:</b> <code>" . val($d['Gstin'] ?? null) . "</code>\n🏷️ <b>TRADE NAME:</b> <code>" . val($d['TradeName'] ?? null) . "</code>\n📋 <b>LEGAL NAME:</b> <code>" . val($d['LegalName'] ?? null) . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n📊 <b>TAXPAYER TYPE:</b> <code>" . val($d['TxpType'] ?? null) . "</code>\n🔓 <b>BLOCK STATUS:</b> <code>" . (($d['BlkStatus'] ?? '') === 'U' ? '✅ UNBLOCKED' : '🚫 BLOCKED') . "</code>\n📅 <b>REG DATE:</b> <code>" . val($d['DtReg'] ?? null) . "</code>\n❌ <b>DEREG DATE:</b> <code>" . val($d['DtDReg'] ?? null) . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n🏠 <b>ADDRESS</b>\n🏢 <b>Building:</b> <code>" . ($d['AddrBnm'] ?? 'N/A') . "</code>\n🔢 <b>Bldg No:</b> <code>" . ($d['AddrBno'] ?? 'N/A') . "</code>\n🏬 <b>Floor:</b> <code>" . ($d['AddrFlno'] ?? 'N/A') . "</code>\n🛣️ <b>Street:</b> <code>" . ($d['AddrSt'] ?? 'N/A') . "</code>\n📍 <b>Location:</b> <code>" . ($d['AddrLoc'] ?? 'N/A') . "</code>\n🗺️ <b>State Code:</b> <code>" . val($d['StateCode'] ?? null) . "</code>\n📮 <b>PINCODE:</b> <code>" . val($d['AddrPncd'] ?? null) . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n💰 <b>CREDITS REMAINING:</b> <code>$c</code>"; }
+function formatAadhaar($dl, $c) { $msg = "🪪 <b>AADHAAR INFORMATION</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n📊 <b>TOTAL RESULTS:</b> <code>" . count($dl) . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n"; foreach ($dl as $i => $d) { $msg .= "📋 <b>RESULT #" . ($i + 1) . "</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n👤 <b>NAME:</b> <code>" . val($d['name'] ?? null) . "</code>\n👨‍👦 <b>FATHER NAME:</b> <code>" . val($d['fname'] ?? null) . "</code>\n🆔 <b>AADHAAR ID:</b> <code>" . val($d['id'] ?? null) . "</code>\n📞 <b>MOBILE:</b> <code>" . val($d['mobile'] ?? null) . "</code>\n📡 <b>CIRCLE:</b> <code>" . val($d['circle'] ?? null) . "</code>\n🏠 <b>ADDRESS:</b>\n<code>" . formatAddress($d['address'] ?? '') . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n"; } $msg .= "💰 <b>CREDITS REMAINING:</b> <code>$c</code>"; return $msg; }
+function formatChallan($d, $c) { $ch = $d['pending_challans'] ?? []; $msg = "🚨 <b>CHALLAN INFORMATION</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n🔢 <b>REG NO:</b> <code>" . val($d['reg_no'] ?? null) . "</code>\n👤 <b>OWNER:</b> <code>" . val($d['owner_name'] ?? null) . "</code>\n🚘 <b>VEHICLE:</b> <code>" . val($d['vehicle'] ?? null) . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n📋 <b>CHALLANS (" . count($ch) . ")</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n"; foreach ($ch as $i => $x) { $off = $x['offence'] ?? null; $ot = is_array($off) ? "• " . implode("\n• ", $off) : val($off); $se = ($x['status'] ?? '') === 'Pending' ? '🟡' : '🟢'; $msg .= "$se <b>CHALLAN #" . ($i + 1) . "</b>\n👤 <b>Violator:</b> <code>" . val($x['violator_name'] ?? null) . "</code>\n🔢 <b>Challan No:</b> <code>" . val($x['challan_no'] ?? null) . "</code>\n📅 <b>Date:</b> <code>" . val($x['date'] ?? null) . "</code>\n💵 <b>Amount:</b> <code>₹" . val($x['amount'] ?? null) . "</code>\n📊 <b>Status:</b> <code>" . val($x['status'] ?? null) . "</code>\n🗺️ <b>State:</b> <code>" . val($x['state'] ?? null) . "</code>\n🚫 <b>Offence:</b> <code>$ot</code>\n─────────────────────\n"; } $msg .= "💰 <b>CREDITS REMAINING:</b> <code>$c</code>"; return $msg; }
+function formatIp($d, $c) { return "🌐 <b>IP LOOKUP</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n🔍 <b>IP:</b> <code>" . val($d['query'] ?? null) . "</code>\n🏢 <b>ISP:</b> <code>" . val($d['isp'] ?? null) . "</code>\n🏛️ <b>ORG:</b> <code>" . val($d['org'] ?? null) . "</code>\n📡 <b>AS:</b> <code>" . val($d['as'] ?? null) . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n🌍 <b>COUNTRY:</b> <code>" . val($d['country'] ?? null) . "</code>\n🏳️ <b>COUNTRY CODE:</b> <code>" . val($d['countryCode'] ?? null) . "</code>\n🗺️ <b>REGION:</b> <code>" . val($d['regionName'] ?? null) . "</code>\n🔤 <b>REGION CODE:</b> <code>" . val($d['region'] ?? null) . "</code>\n🏙️ <b>CITY:</b> <code>" . val($d['city'] ?? null) . "</code>\n📮 <b>ZIP:</b> <code>" . val($d['zip'] ?? null) . "</code>\n🕒 <b>TIMEZONE:</b> <code>" . val($d['timezone'] ?? null) . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n📍 <b>LATITUDE:</b> <code>" . val($d['lat'] ?? null) . "</code>\n📍 <b>LONGITUDE:</b> <code>" . val($d['lon'] ?? null) . "</code>\n━━━━━━━━━━━━━━━━━━━━━━━\n💰 <b>CREDITS REMAINING:</b> <code>$c</code>"; }
 
 function checkForceJoin($userId) {
     global $BOT_TOKEN, $FORCE_CHANNEL;
@@ -987,8 +347,7 @@ function checkForceJoin($userId) {
     $response = file_get_contents($url);
     if ($response === false) return false;
     $data = json_decode($response, true);
-    if (!isset($data['result']['status'])) return false;
-    return in_array($data['result']['status'], ['member', 'administrator', 'creator']);
+    return isset($data['result']['status']) && in_array($data['result']['status'], ['member', 'administrator', 'creator']);
 }
 
 function fetchApi($url) {
@@ -1000,50 +359,31 @@ function fetchApi($url) {
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
-    if ($httpCode === 200 && $response !== false) {
-        return json_decode($response, true);
-    }
-    return null;
+    return ($httpCode === 200 && $response !== false) ? json_decode($response, true) : null;
 }
 
 function generateQrForPlan($userId, $planKey) {
     global $FAM_QR_API, $UPI_ID, $CREDIT_PLANS;
     if (!isset($CREDIT_PLANS[$planKey])) return null;
-    $plan = $CREDIT_PLANS[$planKey];
-    $amount = $plan['price'];
-    $qrUrl = "$FAM_QR_API?upi=$UPI_ID&amount=$amount";
-    $response = fetchApi($qrUrl);
-    if ($response && isset($response['status']) && $response['status'] === 'success') {
-        return [
-            'order_id' => $response['data']['order_id'],
-            'qr_url' => $response['data']['qr_url'],
-            'expires_at' => $response['data']['expires_at_ist'],
-            'amount' => $amount,
-            'plan_key' => $planKey
-        ];
+    $amount = $CREDIT_PLANS[$planKey]['price'];
+    $response = fetchApi("$FAM_QR_API?upi=$UPI_ID&amount=$amount");
+    if ($response && ($response['status'] ?? '') === 'success') {
+        return ['order_id' => $response['data']['order_id'], 'qr_url' => $response['data']['qr_url'], 'expires_at' => $response['data']['expires_at_ist'], 'amount' => $amount, 'plan_key' => $planKey];
     }
     return null;
 }
 
 function verifyPayment($orderId) {
     global $FAM_VERIFY_API, $FAM_API_KEY;
-    $verifyUrl = "$FAM_VERIFY_API?order_id=$orderId&api_key=$FAM_API_KEY";
-    return fetchApi($verifyUrl);
+    return fetchApi("$FAM_VERIFY_API?order_id=$orderId&api_key=$FAM_API_KEY");
 }
 
-function sendMessage($chatId, $text, $replyMarkup = null, $parseMode = 'HTML') {
+function sendMessage($chatId, $text, $replyMarkup = null) {
     global $BOT_TOKEN;
-    $url = "https://api.telegram.org/bot$BOT_TOKEN/sendMessage";
-    $postData = [
-        'chat_id' => $chatId,
-        'text' => $text,
-        'parse_mode' => $parseMode
-    ];
-    if ($replyMarkup) {
-        $postData['reply_markup'] = json_encode($replyMarkup);
-    }
+    $postData = ['chat_id' => $chatId, 'text' => $text, 'parse_mode' => 'HTML'];
+    if ($replyMarkup) $postData['reply_markup'] = json_encode($replyMarkup);
     $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_URL, "https://api.telegram.org/bot$BOT_TOKEN/sendMessage");
     curl_setopt($ch, CURLOPT_POST, true);
     curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -1054,20 +394,11 @@ function sendMessage($chatId, $text, $replyMarkup = null, $parseMode = 'HTML') {
     return json_decode($response, true);
 }
 
-function sendPhoto($chatId, $photoUrl, $caption = '', $replyMarkup = null) {
+function editMessageText($chatId, $messageId, $text) {
     global $BOT_TOKEN;
-    $url = "https://api.telegram.org/bot$BOT_TOKEN/sendPhoto";
-    $postData = [
-        'chat_id' => $chatId,
-        'photo' => $photoUrl,
-        'caption' => $caption,
-        'parse_mode' => 'HTML'
-    ];
-    if ($replyMarkup) {
-        $postData['reply_markup'] = json_encode($replyMarkup);
-    }
+    $postData = ['chat_id' => $chatId, 'message_id' => $messageId, 'text' => $text, 'parse_mode' => 'HTML'];
     $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_URL, "https://api.telegram.org/bot$BOT_TOKEN/editMessageText");
     curl_setopt($ch, CURLOPT_POST, true);
     curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -1080,13 +411,25 @@ function sendPhoto($chatId, $photoUrl, $caption = '', $replyMarkup = null) {
 
 function deleteMessage($chatId, $messageId) {
     global $BOT_TOKEN;
-    $url = "https://api.telegram.org/bot$BOT_TOKEN/deleteMessage";
-    $postData = [
-        'chat_id' => $chatId,
-        'message_id' => $messageId
-    ];
+    $postData = ['chat_id' => $chatId, 'message_id' => $messageId];
     $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_URL, "https://api.telegram.org/bot$BOT_TOKEN/deleteMessage");
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    $response = curl_exec($ch);
+    curl_close($ch);
+    return json_decode($response, true);
+}
+
+function sendPhoto($chatId, $photoUrl, $caption = '', $replyMarkup = null) {
+    global $BOT_TOKEN;
+    $postData = ['chat_id' => $chatId, 'photo' => $photoUrl, 'caption' => $caption, 'parse_mode' => 'HTML'];
+    if ($replyMarkup) $postData['reply_markup'] = json_encode($replyMarkup);
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, "https://api.telegram.org/bot$BOT_TOKEN/sendPhoto");
     curl_setopt($ch, CURLOPT_POST, true);
     curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -1099,14 +442,9 @@ function deleteMessage($chatId, $messageId) {
 
 function answerCallbackQuery($callbackQueryId, $text = '', $showAlert = false) {
     global $BOT_TOKEN;
-    $url = "https://api.telegram.org/bot$BOT_TOKEN/answerCallbackQuery";
-    $postData = [
-        'callback_query_id' => $callbackQueryId,
-        'text' => $text,
-        'show_alert' => $showAlert
-    ];
+    $postData = ['callback_query_id' => $callbackQueryId, 'text' => $text, 'show_alert' => $showAlert];
     $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_URL, "https://api.telegram.org/bot$BOT_TOKEN/answerCallbackQuery");
     curl_setopt($ch, CURLOPT_POST, true);
     curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -1119,42 +457,29 @@ function answerCallbackQuery($callbackQueryId, $text = '', $showAlert = false) {
 
 function getForceJoinKeyboard() {
     global $FORCE_CHANNEL;
-    $channelUsername = str_replace('@', '', $FORCE_CHANNEL);
-    return [
-        'inline_keyboard' => [
-            [['text' => '📢 JOIN CHANNEL', 'url' => "https://t.me/$channelUsername"]],
-            [['text' => '✅ CHECK JOIN', 'callback_data' => 'check_join']]
-        ]
-    ];
+    $cu = str_replace('@', '', $FORCE_CHANNEL);
+    return ['inline_keyboard' => [[['text' => '📢 JOIN CHANNEL', 'url' => "https://t.me/$cu"]], [['text' => '✅ CHECK JOIN', 'callback_data' => 'check_join']]]];
 }
 
 function getAdminKeyboard() {
-    return [
-        'inline_keyboard' => [
-            [['text' => '📊 BOT STATISTICS', 'callback_data' => 'admin_stats'], ['text' => '📋 VIEW PENDING PAYMENTS', 'callback_data' => 'admin_view_pending']],
-            [['text' => '➕ ADD CREDITS', 'callback_data' => 'admin_add_credit'], ['text' => '🎁 BULK ADD CREDITS', 'callback_data' => 'admin_bulk_credit']],
-            [['text' => '➖ REMOVE CREDITS', 'callback_data' => 'admin_remove_credit'], ['text' => '∞ ADD UNLIMITED', 'callback_data' => 'admin_add_unlimited']],
-            [['text' => '🚫 REMOVE UNLIMITED', 'callback_data' => 'admin_remove_unlimited'], ['text' => '👥 ALL USERS', 'callback_data' => 'admin_all_users']],
-            [['text' => '📜 USER HISTORY', 'callback_data' => 'admin_user_history'], ['text' => '📢 BROADCAST', 'callback_data' => 'admin_broadcast']],
-            [['text' => '🚫 BLOCK USER', 'callback_data' => 'admin_block_user'], ['text' => '✅ UNBLOCK USER', 'callback_data' => 'admin_unblock_user']],
-            [['text' => '❌ CANCEL', 'callback_data' => 'admin_cancel']]
-        ]
-    ];
+    return ['inline_keyboard' => [
+        [['text' => '📊 BOT STATISTICS', 'callback_data' => 'admin_stats'], ['text' => '📋 VIEW PENDING PAYMENTS', 'callback_data' => 'admin_view_pending']],
+        [['text' => '➕ ADD CREDITS', 'callback_data' => 'admin_add_credit'], ['text' => '🎁 BULK ADD CREDITS', 'callback_data' => 'admin_bulk_credit']],
+        [['text' => '➖ REMOVE CREDITS', 'callback_data' => 'admin_remove_credit'], ['text' => '∞ ADD UNLIMITED', 'callback_data' => 'admin_add_unlimited']],
+        [['text' => '🚫 REMOVE UNLIMITED', 'callback_data' => 'admin_remove_unlimited'], ['text' => '👥 ALL USERS', 'callback_data' => 'admin_all_users']],
+        [['text' => '📜 USER HISTORY', 'callback_data' => 'admin_user_history'], ['text' => '📢 BROADCAST', 'callback_data' => 'admin_broadcast']],
+        [['text' => '🚫 BLOCK USER', 'callback_data' => 'admin_block_user'], ['text' => '✅ UNBLOCK USER', 'callback_data' => 'admin_unblock_user']],
+        [['text' => '❌ CANCEL', 'callback_data' => 'admin_cancel']]
+    ]];
 }
 
 function processLookupRequest($chatId, $userId, $lookupType, $term, $noResultMessage) {
     global $API_ENDPOINTS, $API_KEY;
     
-    if (!checkForceJoin($userId)) {
-        sendMessage($chatId, "❌ <b>Please join our channel first!</b>", getForceJoinKeyboard());
-        return;
-    }
+    if (!checkForceJoin($userId)) { sendMessage($chatId, "❌ <b>Please join our channel first!</b>", getForceJoinKeyboard()); return; }
     
     $cooldown = checkCooldown($userId);
-    if ($cooldown > 0) {
-        sendMessage($chatId, "⏳ Please wait $cooldown seconds before next request!");
-        return;
-    }
+    if ($cooldown > 0) { sendMessage($chatId, "⏳ Please wait $cooldown seconds before next request!"); return; }
     
     if (!isAdmin($userId) && !hasSufficientCredits($userId)) {
         $user = getUser($userId);
@@ -1166,38 +491,30 @@ function processLookupRequest($chatId, $userId, $lookupType, $term, $noResultMes
     updateLastRequest($userId);
     
     $apiEndpoint = $API_ENDPOINTS[$lookupType] ?? null;
-    if (!$apiEndpoint) {
-        sendMessage($chatId, "❌ Invalid lookup type.");
-        return;
-    }
+    if (!$apiEndpoint) { sendMessage($chatId, "❌ Invalid lookup type."); return; }
     
     $apiUrl = str_replace(['{key}', '{term}'], [$API_KEY, urlencode($term)], $apiEndpoint);
+    
+    $statusMsg = sendMessage($chatId, "⏳ Processing your request...");
     $rawData = fetchApi($apiUrl);
     
     if (!is_valid_response($rawData) || !has_actual_data($rawData)) {
         $user = getUser($userId);
         $credits = $user ? $user['credits'] : '0';
-        sendMessage($chatId, "❌ <b>$noResultMessage</b>\n\n💡 <b>No credits were deducted</b>\n\n💰 <b>CREDITS REMAINING:</b> <code>$credits</code>");
+        editMessageText($chatId, $statusMsg['result']['message_id'], "❌ <b>$noResultMessage</b>\n\n💡 <b>No credits were deducted</b>\n\n💰 <b>CREDITS REMAINING:</b> <code>$credits</code>");
         return;
     }
     
     $extractedData = extract_data_for_type($lookupType, $rawData);
     
-    $validatorMap = [
-        'mobile' => 'validateMobile', 'aadhaar' => 'validateAadhaar', 'family' => 'validateFamily',
-        'lpg' => 'validateLpg', 'paytm' => 'validatePaytm', 'instagram' => 'validateInstagram',
-        'freefire' => 'validateFreefire', 'pan' => 'validatePan', 'pangst' => 'validatePanToGst',
-        'ifsc' => 'validateIfsc', 'pincode' => 'validatePincode', 'telegram' => 'validateTelegram',
-        'gst' => 'validateGst', 'vnum' => 'validateVnum', 'challan' => 'validateChallan',
-        'ip' => 'validateIp', 'vehicle' => 'validateVehicle'
-    ];
+    $validatorMap = ['mobile' => 'validateMobile', 'aadhaar' => 'validateAadhaar', 'family' => 'validateFamily', 'lpg' => 'validateLpg', 'paytm' => 'validatePaytm', 'instagram' => 'validateInstagram', 'freefire' => 'validateFreefire', 'pan' => 'validatePan', 'pangst' => 'validatePanToGst', 'ifsc' => 'validateIfsc', 'pincode' => 'validatePincode', 'telegram' => 'validateTelegram', 'gst' => 'validateGst', 'vnum' => 'validateVnum', 'challan' => 'validateChallan', 'ip' => 'validateIp', 'vehicle' => 'validateVehicle'];
     
     if (isset($validatorMap[$lookupType])) {
         $validator = $validatorMap[$lookupType];
         if (!$validator($extractedData)) {
             $user = getUser($userId);
             $credits = $user ? $user['credits'] : '0';
-            sendMessage($chatId, "❌ <b>$noResultMessage</b>\n\n💡 <b>No credits were deducted</b>\n\n💰 <b>CREDITS REMAINING:</b> <code>$credits</code>");
+            editMessageText($chatId, $statusMsg['result']['message_id'], "❌ <b>$noResultMessage</b>\n\n💡 <b>No credits were deducted</b>\n\n💰 <b>CREDITS REMAINING:</b> <code>$credits</code>");
             return;
         }
     }
@@ -1206,7 +523,7 @@ function processLookupRequest($chatId, $userId, $lookupType, $term, $noResultMes
         if (!deductCredit($userId)) {
             $user = getUser($userId);
             $credits = $user ? $user['credits'] : '0';
-            sendMessage($chatId, "❌ <b>INSUFFICIENT CREDITS</b>\n\n💰 <b>CREDITS REMAINING:</b> <code>$credits</code>");
+            editMessageText($chatId, $statusMsg['result']['message_id'], "❌ <b>INSUFFICIENT CREDITS</b>\n\n💰 <b>CREDITS REMAINING:</b> <code>$credits</code>");
             return;
         }
     }
@@ -1214,26 +531,15 @@ function processLookupRequest($chatId, $userId, $lookupType, $term, $noResultMes
     $user = getUser($userId);
     $credits = $user ? $user['credits'] : '0';
     
-    $formatterMap = [
-        'mobile' => 'formatMobile', 'aadhaar' => 'formatAadhaar', 'family' => 'formatFamily',
-        'lpg' => 'formatLpg', 'paytm' => 'formatPaytm', 'instagram' => 'formatInstagram',
-        'freefire' => 'formatFreefire', 'pan' => 'formatPanDetail', 'pangst' => 'formatPanToGst',
-        'ifsc' => 'formatIfsc', 'pincode' => 'formatPincode', 'telegram' => 'formatTelegram',
-        'gst' => 'formatGstDetail', 'vnum' => 'formatVnum', 'challan' => 'formatChallan',
-        'ip' => 'formatIp', 'vehicle' => 'formatVehicle'
-    ];
+    $formatterMap = ['mobile' => 'formatMobile', 'aadhaar' => 'formatAadhaar', 'family' => 'formatFamily', 'lpg' => 'formatLpg', 'paytm' => 'formatPaytm', 'instagram' => 'formatInstagram', 'freefire' => 'formatFreefire', 'pan' => 'formatPanDetail', 'pangst' => 'formatPanToGst', 'ifsc' => 'formatIfsc', 'pincode' => 'formatPincode', 'telegram' => 'formatTelegram', 'gst' => 'formatGstDetail', 'vnum' => 'formatVnum', 'challan' => 'formatChallan', 'ip' => 'formatIp', 'vehicle' => 'formatVehicle'];
     
     $formatter = $formatterMap[$lookupType];
     $result = $formatter($extractedData, $credits);
     
-    if (is_array($extractedData)) {
-        $resultCount = count($extractedData);
-    } else {
-        $resultCount = 1;
-    }
+    $resultCount = is_array($extractedData) ? count($extractedData) : 1;
     addHistory($userId, $lookupType, $term, $resultCount);
     
-    sendMessage($chatId, $result);
+    editMessageText($chatId, $statusMsg['result']['message_id'], $result);
 }
 
 function handleStart($chatId, $userId, $name, $username, $text = '') {
@@ -1244,109 +550,41 @@ function handleStart($chatId, $userId, $name, $username, $text = '') {
             $refCode = trim($parts[1]);
             $db = loadDatabase();
             foreach ($db['users'] as $user) {
-                if (isset($user['referral_code']) && $user['referral_code'] === $refCode && $user['user_id'] !== (string)$userId) {
-                    $referredBy = $user['user_id'];
-                    break;
-                }
+                if (($user['referral_code'] ?? '') === $refCode && $user['user_id'] !== (string)$userId) { $referredBy = $user['user_id']; break; }
             }
         }
     }
-    
-    if (!getUser($userId)) {
-        createUser($userId, $name, $username, $referredBy);
-    }
-    
+    if (!getUser($userId)) createUser($userId, $name, $username, $referredBy);
     $user = getUser($userId);
     $mention = "<a href=\"tg://user?id=$userId\">$name</a>";
-    $creditsDisplay = $user['credits'];
-    
-    $welcomeMsg = "✨ <b>𝐆ᴀᴜʀᴀᴠ 𝐃ᴇᴛᴀɪʟ𝐬 𝐁ᴏᴛ</b> ✨\n" .
-                  "━━━━━━━━━━━━━━━━━━\n" .
-                  "👋 Namaste $mention! Main aapki madad ke liye taiyar hoon.\n\n" .
-                  "💳 <b>Available Credits:</b> $creditsDisplay\n" .
-                  "━━━━━━━━━━━━━━━━━━\n\n" .
-                  "👇 <b>HAMARI SERVICES</b> 👇\n\n" .
-                  "🔎 <b>Personal Details:</b>\n" .
-                  "☎️ <code>/num</code> ➜ Phone number ki jankari\n" .
-                  "📄 <code>/aadhar</code> ➜ Aadhar card check\n" .
-                  "👨‍👩‍👧 <code>/family</code> ➜ Aadhar se Family details\n" .
-                  "💳 <code>/paytm</code> ➜ Paytm UPI se number\n" .
-                  "🛢️ <code>/lpg</code> ➜ LPG Consumer details\n" .
-                  "💳 <code>/pan</code> ➜ PAN card verification\n" .
-                  "🏢 <code>/gst</code> ➜ GSTIN details\n" .
-                  "📇 <code>/pangst</code> ➜ PAN to GST check\n\n" .
-                  "🚙 <b>Device & Vehicle Details:</b>\n" .
-                  "🏍 <code>/vehicle</code> ➜ RC details check\n" .
-                  "🚗 <code>/vnum</code> ➜ RC to owner number\n" .
-                  "🚔 <code>/challan</code> ➜ Vehicle challan check\n\n" .
-                  "🏢 <b>Other Utilities:</b>\n" .
-                  "🌐 <code>/ip</code> ➜ IP Address Tracker\n" .
-                  "📍 <code>/pincode</code> ➜ Pincode check\n" .
-                  "✈️ <code>/tg</code> ➜ Telegram UID to number\n" .
-                  "📸 <code>/insta</code> ➜ Instagram profile\n" .
-                  "🏦 <code>/ifsc</code> ➜ IFSC Code details\n" .
-                  "🎮 <code>/ff</code> ➜ Free Fire UID details\n\n" .
-                  "⚙️ <b>Settings & Earn:</b>\n" .
-                  "👤 <code>/profile</code> ➜ Apna status dekhein\n" .
-                  "💰 <code>/buy</code> ➜ Credits buy karein\n\n" .
-                  "👨‍💻 <b>DEVELOPER:</b> @ZephrexXx";
-    
-    $keyboard = [
-        'inline_keyboard' => [
-            [['text' => '💰 BUY CREDITS', 'callback_data' => 'buy_credits']],
-            [['text' => '📞 CONTACT SUPPORT', 'url' => 'https://t.me/ZephrexXx']]
-        ]
-    ];
-    
+    $welcomeMsg = "✨ <b>𝐆ᴀᴜʀᴀᴠ 𝐃ᴇᴛᴀɪʟ𝐬 𝐁ᴏᴛ</b> ✨\n━━━━━━━━━━━━━━━━━━\n👋 Namaste $mention! Main aapki madad ke liye taiyar hoon.\n\n💳 <b>Available Credits:</b> {$user['credits']}\n━━━━━━━━━━━━━━━━━━\n\n👇 <b>HAMARI SERVICES</b> 👇\n\n🔎 <b>Personal Details:</b>\n☎️ <code>/num</code> ➜ Phone number ki jankari\n📄 <code>/aadhar</code> ➜ Aadhar card check\n👨‍👩‍👧 <code>/family</code> ➜ Aadhar se Family details\n💳 <code>/paytm</code> ➜ Paytm UPI se number\n🛢️ <code>/lpg</code> ➜ LPG Consumer details\n💳 <code>/pan</code> ➜ PAN card verification\n🏢 <code>/gst</code> ➜ GSTIN details\n📇 <code>/pangst</code> ➜ PAN to GST check\n\n🚙 <b>Device & Vehicle Details:</b>\n🏍 <code>/vehicle</code> ➜ RC details check\n🚗 <code>/vnum</code> ➜ RC to owner number\n🚔 <code>/challan</code> ➜ Vehicle challan check\n\n🏢 <b>Other Utilities:</b>\n🌐 <code>/ip</code> ➜ IP Address Tracker\n📍 <code>/pincode</code> ➜ Pincode check\n✈️ <code>/tg</code> ➜ Telegram UID to number\n📸 <code>/insta</code> ➜ Instagram profile\n🏦 <code>/ifsc</code> ➜ IFSC Code details\n🎮 <code>/ff</code> ➜ Free Fire UID details\n\n⚙️ <b>Settings & Earn:</b>\n👤 <code>/profile</code> ➜ Apna status dekhein\n💰 <code>/buy</code> ➜ Credits buy karein\n\n👨‍💻 <b>DEVELOPER:</b> @ZephrexXx";
+    $keyboard = ['inline_keyboard' => [[['text' => '💰 BUY CREDITS', 'callback_data' => 'buy_credits']], [['text' => '📞 CONTACT SUPPORT', 'url' => 'https://t.me/ZephrexXx']]]];
     sendMessage($chatId, $welcomeMsg, $keyboard);
 }
 
 function handleProfile($chatId, $userId) {
     $user = getUser($userId);
-    if (!$user) {
-        handleStart($chatId, $userId, 'User', 'No Username');
-        return;
-    }
-    
-    $isAdminUser = isAdmin($userId);
-    $role = $isAdminUser ? '👑 Admin' : '👤 User';
+    if (!$user) { handleStart($chatId, $userId, 'User', 'No Username'); return; }
+    $role = isAdmin($userId) ? '👑 Admin' : '👤 User';
     $balance = $user['credits'] === 'UNLIMITED' ? 'Unlimited' : $user['credits'] . ' Credits';
-    
-    $profileMsg = "👤 <b>Profile Info:</b>\n━━━━━━━━━━━━━━━━━━\n" .
-                  "📛 <b>Name:</b> {$user['name']}\n" .
-                  "🆔 <b>User ID:</b> <code>$userId</code>\n" .
-                  "👑 <b>Role:</b> $role\n" .
-                  "💰 <b>Balance:</b> <b>$balance</b>\n" .
-                  "🎁 <b>Referral Code:</b> <code>{$user['referral_code']}</code>\n" .
-                  "📅 <b>Joined:</b> {$user['joined_date']}";
-    
-    sendMessage($chatId, $profileMsg);
+    sendMessage($chatId, "👤 <b>Profile Info:</b>\n━━━━━━━━━━━━━━━━━━\n📛 <b>Name:</b> {$user['name']}\n🆔 <b>User ID:</b> <code>$userId</code>\n👑 <b>Role:</b> $role\n💰 <b>Balance:</b> <b>$balance</b>\n🎁 <b>Referral Code:</b> <code>{$user['referral_code']}</code>\n📅 <b>Joined:</b> {$user['joined_date']}");
 }
 
 function handleBuy($chatId) {
     global $CREDIT_PLANS;
-    
     $plansText = "💳 <b>AVAILABLE CREDIT PLANS:</b>\n\n";
-    foreach ($CREDIT_PLANS as $planData) {
-        $plansText .= "• <b>{$planData['display']}</b>\n";
-    }
+    foreach ($CREDIT_PLANS as $pd) $plansText .= "• <b>{$pd['display']}</b>\n";
     $plansText .= "\n📝 <b>Select a plan below to pay with QR:</b>";
-    
     $keyboard = ['inline_keyboard' => []];
-    foreach ($CREDIT_PLANS as $planKey => $planData) {
-        if ($planKey === 'unlimited') {
-            $keyboard['inline_keyboard'][] = [['text' => '₹3200 — UNLIMITED CREDIT', 'callback_data' => "buy_$planKey"]];
-        } else {
-            $keyboard['inline_keyboard'][] = [['text' => "₹{$planData['price']} — {$planData['credits']} CREDITS", 'callback_data' => "buy_$planKey"]];
-        }
+    foreach ($CREDIT_PLANS as $pk => $pd) {
+        $label = $pk === 'unlimited' ? '₹3200 — UNLIMITED CREDIT' : "₹{$pd['price']} — {$pd['credits']} CREDITS";
+        $keyboard['inline_keyboard'][] = [['text' => $label, 'callback_data' => "buy_$pk"]];
     }
-    
     sendMessage($chatId, $plansText, $keyboard);
 }
 
 function handleCallback($callbackQuery) {
     global $CREDIT_PLANS, $SUCCESS_IMAGE, $FAILED_IMAGE, $LOG_CHANNEL;
-    
     $callbackId = $callbackQuery['id'];
     $userId = $callbackQuery['from']['id'];
     $chatId = $callbackQuery['message']['chat']['id'];
@@ -1354,13 +592,8 @@ function handleCallback($callbackQuery) {
     $data = $callbackQuery['data'];
     
     if ($data === 'check_join') {
-        if (checkForceJoin($userId)) {
-            answerCallbackQuery($callbackId, '✅ Thanks for joining!');
-            sendMessage($chatId, '✅ Now you can use the bot!');
-            sendMessage($chatId, '/start karein bot use karne ke liye.');
-        } else {
-            answerCallbackQuery($callbackId, '❌ Please join the channel first!', true);
-        }
+        if (checkForceJoin($userId)) { answerCallbackQuery($callbackId, '✅ Thanks for joining!'); sendMessage($chatId, '✅ Now you can use the bot!\n/start karein bot use karne ke liye.'); }
+        else answerCallbackQuery($callbackId, '❌ Please join the channel first!', true);
         return;
     }
     
@@ -1369,41 +602,17 @@ function handleCallback($callbackQuery) {
         return;
     }
     
-    if ($data === 'buy_credits') {
-        handleBuy($chatId);
-        answerCallbackQuery($callbackId);
-        return;
-    }
+    if ($data === 'buy_credits') { handleBuy($chatId); answerCallbackQuery($callbackId); return; }
     
     if (strpos($data, 'buy_') === 0) {
         $planKey = substr($data, 4);
-        if (!isset($CREDIT_PLANS[$planKey])) {
-            answerCallbackQuery($callbackId, 'Invalid plan!');
-            return;
-        }
-        
+        if (!isset($CREDIT_PLANS[$planKey])) { answerCallbackQuery($callbackId, 'Invalid plan!'); return; }
         answerCallbackQuery($callbackId, 'Generating QR code...');
-        
         $qrData = generateQrForPlan($userId, $planKey);
-        if (!$qrData) {
-            sendMessage($chatId, '❌ Failed to generate QR code. Please try again.');
-            return;
-        }
-        
+        if (!$qrData) { sendMessage($chatId, '❌ Failed to generate QR code. Please try again.'); return; }
         $plan = $CREDIT_PLANS[$planKey];
-        $caption = "💳 <b>QR PAYMENT</b>\n━━━━━━━━━━━━━━━━━━\n" .
-                   "📦 <b>Plan:</b> <code>{$plan['display']}</code>\n" .
-                   "💰 <b>Amount:</b> <code>₹{$qrData['amount']}</code>\n" .
-                   "⏳ <b>Expires:</b> <code>{$qrData['expires_at']}</code>\n\n" .
-                   "📲 <i>Scan QR code to pay</i>";
-        
-        $keyboard = [
-            'inline_keyboard' => [
-                [['text' => '✅ VERIFY PAYMENT', 'callback_data' => "verify_{$qrData['order_id']}_{$planKey}_$userId"]],
-                [['text' => '❌ CANCEL', 'callback_data' => "cancelqr_$userId"]]
-            ]
-        ];
-        
+        $caption = "💳 <b>QR PAYMENT</b>\n━━━━━━━━━━━━━━━━━━\n📦 <b>Plan:</b> <code>{$plan['display']}</code>\n💰 <b>Amount:</b> <code>₹{$qrData['amount']}</code>\n⏳ <b>Expires:</b> <code>{$qrData['expires_at']}</code>\n\n📲 <i>Scan QR code to pay</i>";
+        $keyboard = ['inline_keyboard' => [[['text' => '✅ VERIFY PAYMENT', 'callback_data' => "verify_{$qrData['order_id']}_{$planKey}_$userId"]], [['text' => '❌ CANCEL', 'callback_data' => "cancelqr_$userId"]]]];
         deleteMessage($chatId, $messageId);
         sendPhoto($chatId, $qrData['qr_url'], $caption, $keyboard);
         return;
@@ -1414,77 +623,31 @@ function handleCallback($callbackQuery) {
         $orderId = $parts[1];
         $planKey = $parts[2];
         $planUserId = $parts[3];
-        
-        if ((string)$userId !== $planUserId && !isAdmin($userId)) {
-            answerCallbackQuery($callbackId, 'This is not your payment!');
-            return;
-        }
-        
+        if ((string)$userId !== $planUserId && !isAdmin($userId)) { answerCallbackQuery($callbackId, 'This is not your payment!'); return; }
         answerCallbackQuery($callbackId, 'Verifying payment...');
-        
         $result = verifyPayment($orderId);
-        
-        if (!$result || !isset($result['status']) || $result['status'] !== 'success') {
-            $failedCaption = "❌ <b>Deposit Not Found...</b>\n━━━━━━━━━━━━━━━━━━\n" .
-                            "🆔 <b>Order Id:</b> <code>$orderId</code>\n\n" .
-                            "<i>Don't Use Same Qr Code Again, Generate New Qr Code</i>";
-            
-            $keyboard = [
-                'inline_keyboard' => [
-                    [['text' => '👀 REGENERATE QR', 'callback_data' => "regen_{$planKey}_$planUserId"]]
-                ]
-            ];
-            
+        if (!$result || ($result['status'] ?? '') !== 'success') {
+            $failedCaption = "❌ <b>Deposit Not Found...</b>\n━━━━━━━━━━━━━━━━━━\n🆔 <b>Order Id:</b> <code>$orderId</code>\n\n<i>Don't Use Same Qr Code Again, Generate New Qr Code</i>";
+            $keyboard = ['inline_keyboard' => [[['text' => '👀 REGENERATE QR', 'callback_data' => "regen_{$planKey}_$planUserId"]]]];
             sendPhoto($chatId, $FAILED_IMAGE, $failedCaption, $keyboard);
             return;
         }
-        
         $paymentData = $result['data'] ?? [];
         $amount = $paymentData['amount'] ?? 0;
         $txnId = $paymentData['transaction_id'] ?? 'N/A';
         $utr = $paymentData['utr'] ?? 'N/A';
         $senderName = $paymentData['sender_name'] ?? 'N/A';
         $paymentTime = $paymentData['payment_time_ist'] ?? 'N/A';
-        
-        if (!isset($CREDIT_PLANS[$planKey])) {
-            sendMessage($chatId, '❌ Invalid plan configuration!');
-            return;
-        }
-        
+        if (!isset($CREDIT_PLANS[$planKey])) { sendMessage($chatId, '❌ Invalid plan configuration!'); return; }
         $plan = $CREDIT_PLANS[$planKey];
-        
-        if ($planKey === 'unlimited') {
-            setUnlimitedCredits($planUserId);
-            $creditMsg = 'UNLIMITED credits';
-        } else {
-            updateUserCredits($planUserId, $plan['credits']);
-            $creditMsg = $plan['credits'] . ' credits';
-        }
-        
+        if ($planKey === 'unlimited') { setUnlimitedCredits($planUserId); $creditMsg = 'UNLIMITED credits'; }
+        else { updateUserCredits($planUserId, $plan['credits']); $creditMsg = $plan['credits'] . ' credits'; }
         $user = getUser($planUserId);
         $remainingCredits = $user ? $user['credits'] : '0';
-        
-        $successCaption = "✅ <b>PAYMENT SUCCESSFUL!</b>\n━━━━━━━━━━━━━━━━━━\n" .
-                         "💰 <b>Amount:</b> ₹$amount\n" .
-                         "👤 <b>Name:</b> $senderName\n" .
-                         "🔢 <b>UTR:</b> <code>$utr</code>\n" .
-                         "🧾 <b>Txn ID:</b> <code>$txnId</code>\n" .
-                         "🕒 <b>Time:</b> $paymentTime\n" .
-                         "━━━━━━━━━━━━━━━━━━\n" .
-                         "🎁 <b>Credits Added:</b> $creditMsg\n" .
-                         "💰 <b>Available Credits:</b> <code>$remainingCredits</code>";
-        
+        $successCaption = "✅ <b>PAYMENT SUCCESSFUL!</b>\n━━━━━━━━━━━━━━━━━━\n💰 <b>Amount:</b> ₹$amount\n👤 <b>Name:</b> $senderName\n🔢 <b>UTR:</b> <code>$utr</code>\n🧾 <b>Txn ID:</b> <code>$txnId</code>\n🕒 <b>Time:</b> $paymentTime\n━━━━━━━━━━━━━━━━━━\n🎁 <b>Credits Added:</b> $creditMsg\n💰 <b>Available Credits:</b> <code>$remainingCredits</code>";
         updateStats($planKey, $plan['price']);
-        
         sendPhoto($chatId, $SUCCESS_IMAGE, $successCaption);
-        
-        $logMsg = "🪙 <b>NEW QR PAYMENT</b>\n━━━━━━━━━━━━━━━━━━\n" .
-                  "👤 <b>User:</b> <code>$planUserId</code>\n" .
-                  "📦 <b>Plan:</b> {$plan['display']}\n" .
-                  "💰 <b>Amount:</b> ₹$amount\n" .
-                  "🔢 <b>UTR:</b> <code>$utr</code>\n" .
-                  "🕒 <b>Time:</b> $paymentTime";
-        
+        $logMsg = "🪙 <b>NEW QR PAYMENT</b>\n━━━━━━━━━━━━━━━━━━\n👤 <b>User:</b> <code>$planUserId</code>\n📦 <b>Plan:</b> {$plan['display']}\n💰 <b>Amount:</b> ₹$amount\n🔢 <b>UTR:</b> <code>$utr</code>\n🕒 <b>Time:</b> $paymentTime";
         sendMessage($LOG_CHANNEL, $logMsg);
         return;
     }
@@ -1495,90 +658,24 @@ function handleCallback($callbackQuery) {
                 $stats = getStats();
                 $db = loadDatabase();
                 $totalUsers = count($db['users']);
-                $bannedUsers = 0;
-                $unlimitedUsers = 0;
-                foreach ($db['users'] as $user) {
-                    if ($user['banned']) $bannedUsers++;
-                    if ($user['credits'] === 'UNLIMITED') $unlimitedUsers++;
-                }
-                
-                $statsText = "📊 <b>Bot Statistics</b>\n━━━━━━━━━━━━━━━━━━\n" .
-                            "💰 <b>Today's Income:</b> ₹{$stats['today_income']}\n" .
-                            "💰 <b>Total Income:</b> ₹{$stats['total_income']}\n" .
-                            "━━━━━━━━━━━━━━━━━━\n📈 <b>Plan Purchases Today:</b>";
-                
-                if (isset($stats['plan_counts']) && count($stats['plan_counts']) > 0) {
-                    foreach ($stats['plan_counts'] as $pk => $cnt) {
-                        $planName = $CREDIT_PLANS[$pk]['display'] ?? $pk;
-                        $statsText .= "\n• $planName: $cnt";
-                    }
-                } else {
-                    $statsText .= "\n• No purchases today";
-                }
-                
-                $statsText .= "\n━━━━━━━━━━━━━━━━━━\n👥 <b>User Stats:</b>\n" .
-                             "• Total: $totalUsers\n" .
-                             "• Banned: $bannedUsers\n" .
-                             "• Unlimited: $unlimitedUsers\n" .
-                             "• Active: " . ($totalUsers - $bannedUsers);
-                
+                $bannedUsers = 0; $unlimitedUsers = 0;
+                foreach ($db['users'] as $u) { if ($u['banned']) $bannedUsers++; if ($u['credits'] === 'UNLIMITED') $unlimitedUsers++; }
+                $statsText = "📊 <b>Bot Statistics</b>\n━━━━━━━━━━━━━━━━━━\n💰 <b>Today's Income:</b> ₹{$stats['today_income']}\n💰 <b>Total Income:</b> ₹{$stats['total_income']}\n━━━━━━━━━━━━━━━━━━\n📈 <b>Plan Purchases Today:</b>";
+                if (isset($stats['plan_counts']) && count($stats['plan_counts']) > 0) { foreach ($stats['plan_counts'] as $pk => $cnt) { $pn = $CREDIT_PLANS[$pk]['display'] ?? $pk; $statsText .= "\n• $pn: $cnt"; } }
+                else $statsText .= "\n• No purchases today";
+                $statsText .= "\n━━━━━━━━━━━━━━━━━━\n👥 <b>User Stats:</b>\n• Total: $totalUsers\n• Banned: $bannedUsers\n• Unlimited: $unlimitedUsers\n• Active: " . ($totalUsers - $bannedUsers);
                 sendMessage($chatId, $statsText);
                 answerCallbackQuery($callbackId);
                 break;
-                
-            case 'admin_add_credit':
-                setUserState($userId, 'addcredit');
-                sendMessage($chatId, "💰 <b>Add Credit</b>\nSend: <code>user_id amount</code>");
-                answerCallbackQuery($callbackId);
-                break;
-                
-            case 'admin_bulk_credit':
-                setUserState($userId, 'bulkcredit');
-                sendMessage($chatId, "🎁 <b>Bulk Add Credits</b>\nSend amount to add to ALL users.");
-                answerCallbackQuery($callbackId);
-                break;
-                
-            case 'admin_remove_credit':
-                setUserState($userId, 'removecredit');
-                sendMessage($chatId, "📉 <b>Remove Credit</b>\nSend: <code>user_id amount</code>");
-                answerCallbackQuery($callbackId);
-                break;
-                
-            case 'admin_add_unlimited':
-                setUserState($userId, 'addunlimited');
-                sendMessage($chatId, "∞ <b>Add Unlimited</b>\nSend user ID.");
-                answerCallbackQuery($callbackId);
-                break;
-                
-            case 'admin_remove_unlimited':
-                setUserState($userId, 'removeunlimited');
-                sendMessage($chatId, "🚫 <b>Remove Unlimited</b>\nSend user ID.");
-                answerCallbackQuery($callbackId);
-                break;
-                
-            case 'admin_broadcast':
-                setUserState($userId, 'broadcast');
-                sendMessage($chatId, "📢 <b>Broadcast</b>\nSend message to broadcast to all users.");
-                answerCallbackQuery($callbackId);
-                break;
-                
-            case 'admin_block_user':
-                setUserState($userId, 'ban');
-                sendMessage($chatId, "🚫 <b>Block User</b>\nSend user ID.");
-                answerCallbackQuery($callbackId);
-                break;
-                
-            case 'admin_unblock_user':
-                setUserState($userId, 'unban');
-                sendMessage($chatId, "✅ <b>Unblock User</b>\nSend user ID.");
-                answerCallbackQuery($callbackId);
-                break;
-                
-            case 'admin_cancel':
-                clearUserState($userId);
-                sendMessage($chatId, "❌ Action cancelled.");
-                answerCallbackQuery($callbackId);
-                break;
+            case 'admin_add_credit': setUserState($userId, 'addcredit'); sendMessage($chatId, "💰 <b>Add Credit</b>\nSend: <code>user_id amount</code>"); answerCallbackQuery($callbackId); break;
+            case 'admin_bulk_credit': setUserState($userId, 'bulkcredit'); sendMessage($chatId, "🎁 <b>Bulk Add Credits</b>\nSend amount to add to ALL users."); answerCallbackQuery($callbackId); break;
+            case 'admin_remove_credit': setUserState($userId, 'removecredit'); sendMessage($chatId, "📉 <b>Remove Credit</b>\nSend: <code>user_id amount</code>"); answerCallbackQuery($callbackId); break;
+            case 'admin_add_unlimited': setUserState($userId, 'addunlimited'); sendMessage($chatId, "∞ <b>Add Unlimited</b>\nSend user ID."); answerCallbackQuery($callbackId); break;
+            case 'admin_remove_unlimited': setUserState($userId, 'removeunlimited'); sendMessage($chatId, "🚫 <b>Remove Unlimited</b>\nSend user ID."); answerCallbackQuery($callbackId); break;
+            case 'admin_broadcast': setUserState($userId, 'broadcast'); sendMessage($chatId, "📢 <b>Broadcast</b>\nSend message to broadcast to all users."); answerCallbackQuery($callbackId); break;
+            case 'admin_block_user': setUserState($userId, 'ban'); sendMessage($chatId, "🚫 <b>Block User</b>\nSend user ID."); answerCallbackQuery($callbackId); break;
+            case 'admin_unblock_user': setUserState($userId, 'unban'); sendMessage($chatId, "✅ <b>Unblock User</b>\nSend user ID."); answerCallbackQuery($callbackId); break;
+            case 'admin_cancel': clearUserState($userId); sendMessage($chatId, "❌ Action cancelled."); answerCallbackQuery($callbackId); break;
         }
     }
 }
@@ -1589,248 +686,96 @@ function handleCommand($message) {
     $name = $message['from']['first_name'] ?? 'User';
     $username = $message['from']['username'] ?? 'No Username';
     $text = $message['text'] ?? '';
-    
     $parts = explode(' ', $text);
     $command = strtolower($parts[0]);
     $args = array_slice($parts, 1);
     
     switch ($command) {
-        case '/start':
-            handleStart($chatId, $userId, $name, $username, $text);
-            break;
-            
-        case '/profile':
-            handleProfile($chatId, $userId);
-            break;
-            
-        case '/buy':
-            handleBuy($chatId);
-            break;
-            
+        case '/start': handleStart($chatId, $userId, $name, $username, $text); break;
+        case '/profile': handleProfile($chatId, $userId); break;
+        case '/buy': handleBuy($chatId); break;
         case '/admin':
-            if (!isAdmin($userId)) {
-                sendMessage($chatId, "❌ Aap admin nahi hain!");
-                return;
-            }
-            $adminMsg = "👑 <b>Admin Panel</b> 👑\n━━━━━━━━━━━━━━━━━━\n\nNiche diye gaye buttons ka use karke bot ko manage karein.";
-            sendMessage($chatId, $adminMsg, getAdminKeyboard());
+            if (!isAdmin($userId)) { sendMessage($chatId, "❌ Aap admin nahi hain!"); return; }
+            sendMessage($chatId, "👑 <b>Admin Panel</b> 👑\n━━━━━━━━━━━━━━━━━━\n\nNiche diye gaye buttons ka use karke bot ko manage karein.", getAdminKeyboard());
             break;
-            
-        case '/num':
-            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/num 9876543210</code>"); return; }
-            processLookupRequest($chatId, $userId, 'mobile', $args[0], "NO INFORMATION FOUND FOR THIS NUMBER");
-            break;
-            
-        case '/aadhar':
-            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/aadhar 123456789012</code>"); return; }
-            processLookupRequest($chatId, $userId, 'aadhaar', $args[0], "NO INFORMATION FOUND FOR THIS AADHAR NUMBER");
-            break;
-            
-        case '/family':
-            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/family 123456789012</code>"); return; }
-            processLookupRequest($chatId, $userId, 'family', $args[0], "NO INFORMATION FOUND FOR THIS AADHAR NUMBER");
-            break;
-            
-        case '/lpg':
-            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/lpg 1234567890</code>"); return; }
-            processLookupRequest($chatId, $userId, 'lpg', $args[0], "NO INFORMATION FOUND FOR THIS LPG CONSUMER NUMBER");
-            break;
-            
-        case '/paytm':
-            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/paytm sharibmughal87@ptyes</code>"); return; }
-            processLookupRequest($chatId, $userId, 'paytm', $args[0], "NO INFORMATION FOUND FOR THIS PAYTM NUMBER");
-            break;
-            
-        case '/pan':
-            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/pan ABCDE1234F</code>"); return; }
-            processLookupRequest($chatId, $userId, 'pan', $args[0], "NO INFORMATION FOUND FOR THIS PAN NUMBER");
-            break;
-            
-        case '/gst':
-            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/gst 22AAAAA0000A1Z5</code>"); return; }
-            processLookupRequest($chatId, $userId, 'gst', $args[0], "NO INFORMATION FOUND FOR THIS GST NUMBER");
-            break;
-            
-        case '/pangst':
-            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/pangst ABCDE1234F</code>"); return; }
-            processLookupRequest($chatId, $userId, 'pangst', $args[0], "NO INFORMATION FOUND FOR THIS PAN NUMBER");
-            break;
-            
-        case '/vehicle':
-            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/vehicle MH01AB1234</code>"); return; }
-            processLookupRequest($chatId, $userId, 'vehicle', $args[0], "NO INFORMATION FOUND FOR THIS VEHICLE NUMBER");
-            break;
-            
-        case '/vnum':
-            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/vnum MH01AB1234</code>"); return; }
-            processLookupRequest($chatId, $userId, 'vnum', $args[0], "NO INFORMATION FOUND FOR THIS VEHICLE NUMBER");
-            break;
-            
-        case '/challan':
-            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/challan MH01AB1234</code>"); return; }
-            processLookupRequest($chatId, $userId, 'challan', $args[0], "NO INFORMATION FOUND FOR THIS VEHICLE NUMBER");
-            break;
-            
-        case '/ip':
-            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/ip 192.168.1.1</code>"); return; }
-            processLookupRequest($chatId, $userId, 'ip', $args[0], "NO INFORMATION FOUND FOR THIS IP ADDRESS");
-            break;
-            
-        case '/pincode':
-            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/pincode 400001</code>"); return; }
-            processLookupRequest($chatId, $userId, 'pincode', $args[0], "NO INFORMATION FOUND FOR THIS PINCODE");
-            break;
-            
-        case '/tg':
-            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/tg username123</code>"); return; }
-            processLookupRequest($chatId, $userId, 'telegram', $args[0], "NO INFORMATION FOUND FOR THIS TELEGRAM USERNAME");
-            break;
-            
-        case '/insta':
-            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/insta username</code>"); return; }
-            processLookupRequest($chatId, $userId, 'instagram', $args[0], "NO INFORMATION FOUND FOR THIS INSTAGRAM USERNAME");
-            break;
-            
-        case '/ifsc':
-            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/ifsc SBIN0001234</code>"); return; }
-            processLookupRequest($chatId, $userId, 'ifsc', $args[0], "NO INFORMATION FOUND FOR THIS IFSC CODE");
-            break;
-            
-        case '/ff':
-            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/ff 1234567890</code>"); return; }
-            processLookupRequest($chatId, $userId, 'freefire', $args[0], "NO INFORMATION FOUND FOR THIS FREE FIRE UID");
-            break;
-            
+        case '/num': if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/num 9876543210</code>"); return; } processLookupRequest($chatId, $userId, 'mobile', $args[0], "NO INFORMATION FOUND FOR THIS NUMBER"); break;
+        case '/aadhar': if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/aadhar 123456789012</code>"); return; } processLookupRequest($chatId, $userId, 'aadhaar', $args[0], "NO INFORMATION FOUND FOR THIS AADHAR NUMBER"); break;
+        case '/family': if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/family 123456789012</code>"); return; } processLookupRequest($chatId, $userId, 'family', $args[0], "NO INFORMATION FOUND FOR THIS AADHAR NUMBER"); break;
+        case '/lpg': if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/lpg 1234567890</code>"); return; } processLookupRequest($chatId, $userId, 'lpg', $args[0], "NO INFORMATION FOUND FOR THIS LPG CONSUMER NUMBER"); break;
+        case '/paytm': if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/paytm sharibmughal87@ptyes</code>"); return; } processLookupRequest($chatId, $userId, 'paytm', $args[0], "NO INFORMATION FOUND FOR THIS PAYTM NUMBER"); break;
+        case '/pan': if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/pan ABCDE1234F</code>"); return; } processLookupRequest($chatId, $userId, 'pan', $args[0], "NO INFORMATION FOUND FOR THIS PAN NUMBER"); break;
+        case '/gst': if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/gst 22AAAAA0000A1Z5</code>"); return; } processLookupRequest($chatId, $userId, 'gst', $args[0], "NO INFORMATION FOUND FOR THIS GST NUMBER"); break;
+        case '/pangst': if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/pangst ABCDE1234F</code>"); return; } processLookupRequest($chatId, $userId, 'pangst', $args[0], "NO INFORMATION FOUND FOR THIS PAN NUMBER"); break;
+        case '/vehicle': if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/vehicle MH01AB1234</code>"); return; } processLookupRequest($chatId, $userId, 'vehicle', $args[0], "NO INFORMATION FOUND FOR THIS VEHICLE NUMBER"); break;
+        case '/vnum': if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/vnum MH01AB1234</code>"); return; } processLookupRequest($chatId, $userId, 'vnum', $args[0], "NO INFORMATION FOUND FOR THIS VEHICLE NUMBER"); break;
+        case '/challan': if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/challan MH01AB1234</code>"); return; } processLookupRequest($chatId, $userId, 'challan', $args[0], "NO INFORMATION FOUND FOR THIS VEHICLE NUMBER"); break;
+        case '/ip': if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/ip 192.168.1.1</code>"); return; } processLookupRequest($chatId, $userId, 'ip', $args[0], "NO INFORMATION FOUND FOR THIS IP ADDRESS"); break;
+        case '/pincode': if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/pincode 400001</code>"); return; } processLookupRequest($chatId, $userId, 'pincode', $args[0], "NO INFORMATION FOUND FOR THIS PINCODE"); break;
+        case '/tg': if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/tg username123</code>"); return; } processLookupRequest($chatId, $userId, 'telegram', $args[0], "NO INFORMATION FOUND FOR THIS TELEGRAM USERNAME"); break;
+        case '/insta': if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/insta username</code>"); return; } processLookupRequest($chatId, $userId, 'instagram', $args[0], "NO INFORMATION FOUND FOR THIS INSTAGRAM USERNAME"); break;
+        case '/ifsc': if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/ifsc SBIN0001234</code>"); return; } processLookupRequest($chatId, $userId, 'ifsc', $args[0], "NO INFORMATION FOUND FOR THIS IFSC CODE"); break;
+        case '/ff': if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/ff 1234567890</code>"); return; } processLookupRequest($chatId, $userId, 'freefire', $args[0], "NO INFORMATION FOUND FOR THIS FREE FIRE UID"); break;
         default:
             $state = getUserState($userId);
-            if ($state) {
-                handleStateMessage($chatId, $userId, $state, $text);
-            }
+            if ($state) handleStateMessage($chatId, $userId, $state, $text);
             break;
     }
 }
 
 function handleStateMessage($chatId, $userId, $state, $text) {
     $action = $state['action'];
-    
-    if ($text === '/cancel') {
-        clearUserState($userId);
-        sendMessage($chatId, "❌ Action cancelled.");
-        return;
-    }
-    
+    if ($text === '/cancel') { clearUserState($userId); sendMessage($chatId, "❌ Action cancelled."); return; }
     switch ($action) {
         case 'addcredit':
             $parts = explode(' ', $text);
             if (count($parts) >= 2) {
-                $targetId = $parts[0];
-                $amount = strtoupper($parts[1]);
-                if ($amount === 'UNLIMITED') {
-                    setUnlimitedCredits($targetId);
-                    sendMessage($chatId, "✅ Added UNLIMITED credits to $targetId");
-                } else {
-                    updateUserCredits($targetId, (int)$amount);
-                    sendMessage($chatId, "✅ Added $amount credits to $targetId");
-                }
-            } else {
-                sendMessage($chatId, "❌ Format: <code>user_id amount</code>");
-            }
+                $targetId = $parts[0]; $amount = strtoupper($parts[1]);
+                if ($amount === 'UNLIMITED') { setUnlimitedCredits($targetId); sendMessage($chatId, "✅ Added UNLIMITED credits to $targetId"); }
+                else { updateUserCredits($targetId, (int)$amount); sendMessage($chatId, "✅ Added $amount credits to $targetId"); }
+            } else sendMessage($chatId, "❌ Format: <code>user_id amount</code>");
             clearUserState($userId);
             break;
-            
         case 'bulkcredit':
             $amount = (int)trim($text);
             if ($amount > 0) {
-                $db = loadDatabase();
-                $count = 0;
-                foreach ($db['users'] as $key => $user) {
-                    if ($user['credits'] !== 'UNLIMITED') {
-                        $current = is_numeric($user['credits']) ? (int)$user['credits'] : 0;
-                        $db['users'][$key]['credits'] = (string)($current + $amount);
-                        $count++;
-                    }
+                $db = loadDatabase(); $count = 0;
+                foreach ($db['users'] as $key => $u) {
+                    if ($u['credits'] !== 'UNLIMITED') { $current = is_numeric($u['credits']) ? (int)$u['credits'] : 0; $db['users'][$key]['credits'] = (string)($current + $amount); $count++; }
                 }
                 saveDatabase($db);
                 sendMessage($chatId, "✅ Added $amount credits to $count users.");
-            } else {
-                sendMessage($chatId, "❌ Invalid amount.");
-            }
+            } else sendMessage($chatId, "❌ Invalid amount.");
             clearUserState($userId);
             break;
-            
         case 'removecredit':
             $parts = explode(' ', $text);
             if (count($parts) >= 2) {
-                $targetId = $parts[0];
-                $amount = (int)$parts[1];
+                $targetId = $parts[0]; $amount = (int)$parts[1];
                 $user = getUser($targetId);
                 if ($user) {
-                    if ($user['credits'] !== 'UNLIMITED') {
-                        $current = (int)$user['credits'];
-                        $new = max(0, $current - $amount);
-                        $db = loadDatabase();
-                        $db['users'][(string)$targetId]['credits'] = (string)$new;
-                        saveDatabase($db);
-                        sendMessage($chatId, "✅ Removed $amount credits. New balance: $new");
-                    } else {
-                        sendMessage($chatId, "User has unlimited credits.");
-                    }
-                } else {
-                    sendMessage($chatId, "User not found.");
-                }
-            } else {
-                sendMessage($chatId, "❌ Format: <code>user_id amount</code>");
-            }
+                    if ($user['credits'] !== 'UNLIMITED') { $new = max(0, (int)$user['credits'] - $amount); $db = loadDatabase(); $db['users'][(string)$targetId]['credits'] = (string)$new; saveDatabase($db); sendMessage($chatId, "✅ Removed $amount credits. New balance: $new"); }
+                    else sendMessage($chatId, "User has unlimited credits.");
+                } else sendMessage($chatId, "User not found.");
+            } else sendMessage($chatId, "❌ Format: <code>user_id amount</code>");
             clearUserState($userId);
             break;
-            
-        case 'addunlimited':
-            $targetId = trim($text);
-            setUnlimitedCredits($targetId);
-            sendMessage($chatId, "✅ Set unlimited credits for $targetId");
-            clearUserState($userId);
-            break;
-            
-        case 'removeunlimited':
-            $targetId = trim($text);
-            removeUnlimitedCredits($targetId);
-            sendMessage($chatId, "✅ Removed unlimited credits from $targetId");
-            clearUserState($userId);
-            break;
-            
+        case 'addunlimited': setUnlimitedCredits(trim($text)); sendMessage($chatId, "✅ Set unlimited credits for " . trim($text)); clearUserState($userId); break;
+        case 'removeunlimited': removeUnlimitedCredits(trim($text)); sendMessage($chatId, "✅ Removed unlimited credits from " . trim($text)); clearUserState($userId); break;
         case 'ban':
-            $targetId = trim($text);
             $db = loadDatabase();
-            if (isset($db['users'][(string)$targetId])) {
-                $db['users'][(string)$targetId]['banned'] = 1;
-                saveDatabase($db);
-                sendMessage($chatId, "✅ User $targetId banned.");
-            } else {
-                sendMessage($chatId, "User not found.");
-            }
+            if (isset($db['users'][(string)trim($text)])) { $db['users'][(string)trim($text)]['banned'] = 1; saveDatabase($db); sendMessage($chatId, "✅ User " . trim($text) . " banned."); }
+            else sendMessage($chatId, "User not found.");
             clearUserState($userId);
             break;
-            
         case 'unban':
-            $targetId = trim($text);
             $db = loadDatabase();
-            if (isset($db['users'][(string)$targetId])) {
-                $db['users'][(string)$targetId]['banned'] = 0;
-                saveDatabase($db);
-                sendMessage($chatId, "✅ User $targetId unbanned.");
-            } else {
-                sendMessage($chatId, "User not found.");
-            }
+            if (isset($db['users'][(string)trim($text)])) { $db['users'][(string)trim($text)]['banned'] = 0; saveDatabase($db); sendMessage($chatId, "✅ User " . trim($text) . " unbanned."); }
+            else sendMessage($chatId, "User not found.");
             clearUserState($userId);
             break;
-            
         case 'broadcast':
-            $db = loadDatabase();
-            $success = 0;
-            foreach ($db['users'] as $user) {
-                sendMessage($user['user_id'], $text);
-                $success++;
-            }
+            $db = loadDatabase(); $success = 0;
+            foreach ($db['users'] as $u) { sendMessage($u['user_id'], $text); $success++; }
             sendMessage($chatId, "✅ Broadcast sent to $success/" . count($db['users']) . " users.");
             clearUserState($userId);
             break;
@@ -1840,11 +785,8 @@ function handleStateMessage($chatId, $userId, $state, $text) {
 $input = file_get_contents('php://input');
 $update = json_decode($input, true);
 
-if (isset($update['message'])) {
-    handleCommand($update['message']);
-} elseif (isset($update['callback_query'])) {
-    handleCallback($update['callback_query']);
-}
+if (isset($update['message'])) handleCommand($update['message']);
+elseif (isset($update['callback_query'])) handleCallback($update['callback_query']);
 
 header('Content-Type: application/json');
 echo json_encode(['ok' => true]);
