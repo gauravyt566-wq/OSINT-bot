@@ -57,86 +57,110 @@ $FAM_VERIFY_API = "https://fampay.anujbots.xyz/verify.php";
 $SUCCESS_IMAGE = "https://t.me/ZephrexXx_media/21";
 $FAILED_IMAGE = "https://t.me/ZephrexXx_media/23";
 
-function saveToGithub($filename, $content) {
-    global $GITHUB_API_URL, $GITHUB_HEADERS;
-    try {
-        $url = "$GITHUB_API_URL/$filename";
-        $contentBase64 = base64_encode($content);
-        
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $GITHUB_HEADERS);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-        
-        $data = [
-            "message" => "Update $filename",
-            "content" => $contentBase64
-        ];
-        
-        if ($httpCode == 200) {
-            $existing = json_decode($response, true);
-            if (isset($existing['sha'])) {
-                $data['sha'] = $existing['sha'];
-            }
-        }
-        
-        $ch = curl_init($url);
+function githubRequest($url, $method = 'GET', $data = null) {
+    global $GITHUB_HEADERS;
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $GITHUB_HEADERS);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    
+    if ($method === 'PUT') {
         curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "PUT");
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $GITHUB_HEADERS);
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-        
-        return in_array($httpCode, [200, 201]);
-    } catch (Exception $e) {
-        return false;
+    } elseif ($method === 'POST') {
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
     }
+    
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    
+    return ['code' => $httpCode, 'body' => json_decode($response, true)];
 }
 
-function initDatabase() {
-    $dbFile = '/tmp/bot_database.json';
-    if (!file_exists($dbFile)) {
-        $initialData = ['users' => [], 'history' => [], 'user_states' => [], 'payment_stats' => ['today_income' => 0, 'total_income' => 0, 'plan_counts' => [], 'today_date' => date('Y-m-d')], 'pending_payments' => []];
-        file_put_contents($dbFile, json_encode($initialData));
+function githubSave($filename, $content) {
+    global $GITHUB_API_URL;
+    
+    $url = "$GITHUB_API_URL/$filename";
+    $contentBase64 = base64_encode($content);
+    
+    $existing = githubRequest($url);
+    $data = [
+        "message" => "Update $filename",
+        "content" => $contentBase64
+    ];
+    
+    if ($existing['code'] == 200 && isset($existing['body']['sha'])) {
+        $data['sha'] = $existing['body']['sha'];
     }
-    return $dbFile;
+    
+    $result = githubRequest($url, 'PUT', $data);
+    return in_array($result['code'], [200, 201]);
+}
+
+function githubLoad($filename) {
+    global $GITHUB_API_URL;
+    $url = "$GITHUB_API_URL/$filename";
+    $result = githubRequest($url);
+    
+    if ($result['code'] == 200 && isset($result['body']['content'])) {
+        $decoded = base64_decode($result['body']['content']);
+        return json_decode($decoded, true);
+    }
+    return null;
 }
 
 function loadDatabase() {
-    $dbFile = initDatabase();
-    $data = json_decode(file_get_contents($dbFile), true);
-    if (!$data) $data = ['users' => [], 'history' => [], 'user_states' => [], 'pending_payments' => []];
-    if (!isset($data['pending_payments'])) $data['pending_payments'] = [];
-    if (!isset($data['payment_stats'])) $data['payment_stats'] = ['today_income' => 0, 'total_income' => 0, 'plan_counts' => [], 'today_date' => date('Y-m-d')];
-    return $data;
+    $users = githubLoad("users_data.json");
+    $pending = githubLoad("pending_payments.json");
+    $stats = githubLoad("payment_stats.json");
+    $history = githubLoad("history.json");
+    $states = githubLoad("user_states.json");
+    
+    $db = [
+        'users' => [],
+        'history' => $history ?? [],
+        'user_states' => $states ?? [],
+        'pending_payments' => $pending ?? [],
+        'payment_stats' => $stats ?? ['today_income' => 0, 'total_income' => 0, 'plan_counts' => [], 'today_date' => date('Y-m-d'), 'pending_count' => 0]
+    ];
+    
+    if ($users) {
+        foreach ($users as $user) {
+            if (isset($user['user_id'])) {
+                $db['users'][(string)$user['user_id']] = $user;
+            }
+        }
+    }
+    
+    return $db;
 }
 
 function saveDatabase($data) {
-    $jsonData = json_encode($data);
-    file_put_contents('/tmp/bot_database.json', $jsonData);
-    
     if (isset($data['users'])) {
         $usersList = [];
         foreach ($data['users'] as $uid => $user) {
             $usersList[] = $user;
         }
-        saveToGithub("users_data.json", json_encode($usersList, JSON_PRETTY_PRINT));
+        githubSave("users_data.json", json_encode($usersList, JSON_PRETTY_PRINT));
+    }
+    
+    if (isset($data['history'])) {
+        githubSave("history.json", json_encode($data['history'], JSON_PRETTY_PRINT));
+    }
+    
+    if (isset($data['user_states'])) {
+        githubSave("user_states.json", json_encode($data['user_states'], JSON_PRETTY_PRINT));
     }
     
     if (isset($data['pending_payments'])) {
-        saveToGithub("pending_payments.json", json_encode($data['pending_payments'], JSON_PRETTY_PRINT));
+        githubSave("pending_payments.json", json_encode($data['pending_payments'], JSON_PRETTY_PRINT));
     }
     
     if (isset($data['payment_stats'])) {
-        saveToGithub("payment_stats.json", json_encode($data['payment_stats'], JSON_PRETTY_PRINT));
+        githubSave("payment_stats.json", json_encode($data['payment_stats'], JSON_PRETTY_PRINT));
     }
 }
 
