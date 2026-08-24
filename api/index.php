@@ -559,16 +559,24 @@ function getMainMenuKeyboard() {
     return [
         'inline_keyboard' => [
             [['text' => '📱 NUM INFO', 'callback_data' => 'menu_mobile'], ['text' => '🪪 AADHAAR INFO', 'callback_data' => 'menu_aadhaar']],
-            [['text' => '👨‍👩‍👧‍👦 FAMILY INFO', 'callback_data' => 'menu_family'], ['text' => '🛢️ LPG INFO', 'callback_data' => 'menu_lpg']],
-            [['text' => '🚗 VEHICLE INFO', 'callback_data' => 'menu_vehicle'], ['text' => '🔢 VEHICLE NUMBER TO OWNER NUM', 'callback_data' => 'menu_vnum']],
-            [['text' => '🚨 CHALLAN INFO', 'callback_data' => 'menu_challan'], ['text' => '📸 INSTA INFO', 'callback_data' => 'menu_instagram']],
-            [['text' => '🎮 FF INFO', 'callback_data' => 'menu_freefire']],
+
             [['text' => '💳 PAYTM UPI TO NUM', 'callback_data' => 'menu_paytm']],
-            [['text' => '💳 PAN INFO', 'callback_data' => 'menu_pan'], ['text' => '🏢 GST INFO', 'callback_data' => 'menu_gst']],
-            [['text' => '📇 PAN TO GST', 'callback_data' => 'menu_pangst'], ['text' => '🏦 IFSC INFO', 'callback_data' => 'menu_ifsc']],
-            [['text' => '📍 PINCODE INFO', 'callback_data' => 'menu_pincode'], ['text' => '✈️ TG INFO', 'callback_data' => 'menu_telegram']],
-            [['text' => '🌐 IP INFO', 'callback_data' => 'menu_ip'], ['text' => '👤 PROFILE', 'callback_data' => 'menu_profile']],
-            [['text' => '💰 BUY CREDITS', 'callback_data' => 'buy_credits']]
+
+            [['text' => '👨‍👩‍👧‍👦 FAMILY INFO', 'callback_data' => 'menu_family'], ['text' => '🛢️ LPG INFO', 'callback_data' => 'menu_lpg']],
+
+            [['text' => '🚗 VEHICLE INFO', 'callback_data' => 'menu_vehicle'], ['text' => '🔢 VEHICLE → OWNER NUM', 'callback_data' => 'menu_vnum']],
+
+            [['text' => '🚨 CHALLAN INFO', 'callback_data' => 'menu_challan'], ['text' => '📸 INSTA INFO', 'callback_data' => 'menu_instagram']],
+
+            [['text' => '🎮 FF INFO', 'callback_data' => 'menu_freefire'], ['text' => '💳 PAN INFO', 'callback_data' => 'menu_pan']],
+
+            [['text' => '🏢 GST INFO', 'callback_data' => 'menu_gst'], ['text' => '📇 PAN TO GST', 'callback_data' => 'menu_pangst']],
+
+            [['text' => '🏦 IFSC INFO', 'callback_data' => 'menu_ifsc'], ['text' => '📍 PINCODE INFO', 'callback_data' => 'menu_pincode']],
+
+            [['text' => '✈️ TG INFO', 'callback_data' => 'menu_telegram'], ['text' => '🌐 IP INFO', 'callback_data' => 'menu_ip']],
+
+            [['text' => '👤 PROFILE', 'callback_data' => 'menu_profile'], ['text' => '💰 BUY CREDITS', 'callback_data' => 'buy_credits']]
         ]
     ];
 }
