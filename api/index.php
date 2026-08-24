@@ -14,15 +14,6 @@ $REFER_BONUS = 2;
 $COOLDOWN = 3;
 $UPI_ID = "gaurav.intel@fam";
 
-$GITHUB_TOKEN = "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";
-$GITHUB_REPO = "gauravyt566-wq/DB";
-$GITHUB_API_URL = "https://api.github.com/repos/$GITHUB_REPO/contents";
-$GITHUB_HEADERS = [
-    "Authorization: token $GITHUB_TOKEN",
-    "Accept: application/vnd.github.v3+json",
-    "User-Agent: PHP-Bot"
-];
-
 $CREDIT_PLANS = [
     "10" => ["price" => 50, "credits" => 10, "display" => "₹50 — 10 CREDITS"],
     "20" => ["price" => 100, "credits" => 20, "display" => "₹100 — 20 CREDITS"],
@@ -57,111 +48,25 @@ $FAM_VERIFY_API = "https://fampay.anujbots.xyz/verify.php";
 $SUCCESS_IMAGE = "https://t.me/ZephrexXx_media/21";
 $FAILED_IMAGE = "https://t.me/ZephrexXx_media/23";
 
-function githubRequest($url, $method = 'GET', $data = null) {
-    global $GITHUB_HEADERS;
-    $ch = curl_init($url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, $GITHUB_HEADERS);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 15);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    
-    if ($method === 'PUT') {
-        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "PUT");
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-    } elseif ($method === 'POST') {
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+function initDatabase() {
+    $dbFile = '/tmp/bot_database.json';
+    if (!file_exists($dbFile)) {
+        $initialData = ['users' => [], 'history' => [], 'user_states' => [], 'payment_stats' => ['today_income' => 0, 'total_income' => 0, 'plan_counts' => [], 'today_date' => date('Y-m-d')], 'pending_payments' => []];
+        file_put_contents($dbFile, json_encode($initialData));
     }
-    
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-    
-    return ['code' => $httpCode, 'body' => json_decode($response, true)];
-}
-
-function githubSave($filename, $content) {
-    global $GITHUB_API_URL;
-    
-    $url = "$GITHUB_API_URL/$filename";
-    $contentBase64 = base64_encode($content);
-    
-    $existing = githubRequest($url);
-    $data = [
-        "message" => "Update $filename",
-        "content" => $contentBase64
-    ];
-    
-    if ($existing['code'] == 200 && isset($existing['body']['sha'])) {
-        $data['sha'] = $existing['body']['sha'];
-    }
-    
-    $result = githubRequest($url, 'PUT', $data);
-    return in_array($result['code'], [200, 201]);
-}
-
-function githubLoad($filename) {
-    global $GITHUB_API_URL;
-    $url = "$GITHUB_API_URL/$filename";
-    $result = githubRequest($url);
-    
-    if ($result['code'] == 200 && isset($result['body']['content'])) {
-        $decoded = base64_decode($result['body']['content']);
-        return json_decode($decoded, true);
-    }
-    return null;
+    return $dbFile;
 }
 
 function loadDatabase() {
-    $users = githubLoad("users_data.json");
-    $pending = githubLoad("pending_payments.json");
-    $stats = githubLoad("payment_stats.json");
-    $history = githubLoad("history.json");
-    $states = githubLoad("user_states.json");
-    
-    $db = [
-        'users' => [],
-        'history' => $history ?? [],
-        'user_states' => $states ?? [],
-        'pending_payments' => $pending ?? [],
-        'payment_stats' => $stats ?? ['today_income' => 0, 'total_income' => 0, 'plan_counts' => [], 'today_date' => date('Y-m-d'), 'pending_count' => 0]
-    ];
-    
-    if ($users) {
-        foreach ($users as $user) {
-            if (isset($user['user_id'])) {
-                $db['users'][(string)$user['user_id']] = $user;
-            }
-        }
-    }
-    
-    return $db;
+    $dbFile = initDatabase();
+    $data = json_decode(file_get_contents($dbFile), true);
+    if (!$data) $data = ['users' => [], 'history' => [], 'user_states' => [], 'pending_payments' => []];
+    if (!isset($data['pending_payments'])) $data['pending_payments'] = [];
+    return $data;
 }
 
 function saveDatabase($data) {
-    if (isset($data['users'])) {
-        $usersList = [];
-        foreach ($data['users'] as $uid => $user) {
-            $usersList[] = $user;
-        }
-        githubSave("users_data.json", json_encode($usersList, JSON_PRETTY_PRINT));
-    }
-    
-    if (isset($data['history'])) {
-        githubSave("history.json", json_encode($data['history'], JSON_PRETTY_PRINT));
-    }
-    
-    if (isset($data['user_states'])) {
-        githubSave("user_states.json", json_encode($data['user_states'], JSON_PRETTY_PRINT));
-    }
-    
-    if (isset($data['pending_payments'])) {
-        githubSave("pending_payments.json", json_encode($data['pending_payments'], JSON_PRETTY_PRINT));
-    }
-    
-    if (isset($data['payment_stats'])) {
-        githubSave("payment_stats.json", json_encode($data['payment_stats'], JSON_PRETTY_PRINT));
-    }
+    file_put_contents('/tmp/bot_database.json', json_encode($data));
 }
 
 function getUser($userId) {
@@ -279,7 +184,6 @@ function updateStats($planKey = null, $amount = 0) {
         $db['payment_stats']['total_income'] = ($db['payment_stats']['total_income'] ?? 0) + $amount;
         $db['payment_stats']['plan_counts'][$planKey] = ($db['payment_stats']['plan_counts'][$planKey] ?? 0) + 1;
     }
-    $db['payment_stats']['pending_count'] = count($db['pending_payments'] ?? []);
     saveDatabase($db);
 }
 
@@ -904,7 +808,7 @@ function handleCallback($callbackQuery) {
                 $totalUsers = count($db['users']);
                 $bannedUsers = 0; $unlimitedUsers = 0;
                 foreach ($db['users'] as $u) { if ($u['banned']) $bannedUsers++; if ($u['credits'] === 'UNLIMITED') $unlimitedUsers++; }
-                $statsText = "📊 <b>Bot Statistics</b>\n━━━━━━━━━━━━━━━━━━\n💰 <b>Today's Income:</b> ₹{$stats['today_income']}\n💰 <b>Total Income:</b> ₹{$stats['total_income']}\n⏳ <b>Pending:</b> {$stats['pending_count']}\n━━━━━━━━━━━━━━━━━━\n📈 <b>Plan Purchases Today:</b>";
+                $statsText = "📊 <b>Bot Statistics</b>\n━━━━━━━━━━━━━━━━━━\n💰 <b>Today's Income:</b> ₹{$stats['today_income']}\n💰 <b>Total Income:</b> ₹{$stats['total_income']}\n━━━━━━━━━━━━━━━━━━\n📈 <b>Plan Purchases Today:</b>";
                 if (isset($stats['plan_counts']) && count($stats['plan_counts']) > 0) { foreach ($stats['plan_counts'] as $pk => $cnt) { $pn = $CREDIT_PLANS[$pk]['display'] ?? $pk; $statsText .= "\n• $pn: $cnt"; } }
                 else $statsText .= "\n• No purchases today";
                 $statsText .= "\n━━━━━━━━━━━━━━━━━━\n👥 <b>User Stats:</b>\n• Total: $totalUsers\n• Banned: $bannedUsers\n• Unlimited: $unlimitedUsers\n• Active: " . ($totalUsers - $bannedUsers);
