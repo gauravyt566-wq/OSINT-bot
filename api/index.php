@@ -441,7 +441,7 @@ function verifyPayment($orderId) {
 
 function sendMessage($chatId, $text, $replyMarkup = null) {
     global $BOT_TOKEN;
-    $postData = ['chat_id' => $chatId, 'text' => $text, 'parse_mode' => 'HTML'];
+    $postData = ['chat_id' => $chatId, 'text' => $text, 'parse_mode' => 'HTML', 'disable_web_page_preview' => true];
     if ($replyMarkup) $postData['reply_markup'] = json_encode($replyMarkup);
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, "https://api.telegram.org/bot$BOT_TOKEN/sendMessage");
@@ -457,7 +457,7 @@ function sendMessage($chatId, $text, $replyMarkup = null) {
 
 function sendPhoto($chatId, $photoUrl, $caption = '', $replyMarkup = null) {
     global $BOT_TOKEN;
-    $postData = ['chat_id' => $chatId, 'photo' => $photoUrl, 'caption' => $caption, 'parse_mode' => 'HTML'];
+    $postData = ['chat_id' => $chatId, 'photo' => $photoUrl, 'caption' => $caption, 'parse_mode' => 'HTML', 'disable_web_page_preview' => true];
     if ($replyMarkup) $postData['reply_markup'] = json_encode($replyMarkup);
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, "https://api.telegram.org/bot$BOT_TOKEN/sendPhoto");
@@ -473,7 +473,7 @@ function sendPhoto($chatId, $photoUrl, $caption = '', $replyMarkup = null) {
 
 function editMessageText($chatId, $messageId, $text, $replyMarkup = null) {
     global $BOT_TOKEN;
-    $postData = ['chat_id' => $chatId, 'message_id' => $messageId, 'text' => $text, 'parse_mode' => 'HTML'];
+    $postData = ['chat_id' => $chatId, 'message_id' => $messageId, 'text' => $text, 'parse_mode' => 'HTML', 'disable_web_page_preview' => true];
     if ($replyMarkup) $postData['reply_markup'] = json_encode($replyMarkup);
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, "https://api.telegram.org/bot$BOT_TOKEN/editMessageText");
@@ -558,15 +558,16 @@ function getAdminKeyboard() {
 function getMainMenuKeyboard() {
     return [
         'inline_keyboard' => [
-            [['text' => '📱 MOBILE LOOKUP', 'callback_data' => 'menu_mobile'], ['text' => '🪪 AADHAAR LOOKUP', 'callback_data' => 'menu_aadhaar']],
-            [['text' => '👨‍👩‍👧‍👦 FAMILY LOOKUP', 'callback_data' => 'menu_family'], ['text' => '🛢️ LPG LOOKUP', 'callback_data' => 'menu_lpg']],
-            [['text' => '🚗 VEHICLE LOOKUP', 'callback_data' => 'menu_vehicle'], ['text' => '📞 VNUM LOOKUP', 'callback_data' => 'menu_vnum']],
-            [['text' => '🚨 CHALLAN LOOKUP', 'callback_data' => 'menu_challan'], ['text' => '📸 INSTAGRAM LOOKUP', 'callback_data' => 'menu_instagram']],
-            [['text' => '🎮 FREE FIRE LOOKUP', 'callback_data' => 'menu_freefire'], ['text' => '💳 PAYTM LOOKUP', 'callback_data' => 'menu_paytm']],
-            [['text' => '💳 PAN LOOKUP', 'callback_data' => 'menu_pan'], ['text' => '🏢 GST LOOKUP', 'callback_data' => 'menu_gst']],
-            [['text' => '📇 PAN TO GST', 'callback_data' => 'menu_pangst'], ['text' => '🏦 IFSC LOOKUP', 'callback_data' => 'menu_ifsc']],
-            [['text' => '📍 PINCODE LOOKUP', 'callback_data' => 'menu_pincode'], ['text' => '✈️ TELEGRAM LOOKUP', 'callback_data' => 'menu_telegram']],
-            [['text' => '🌐 IP LOOKUP', 'callback_data' => 'menu_ip'], ['text' => '👤 PROFILE', 'callback_data' => 'menu_profile']],
+            [['text' => '📱 NUM INFO', 'callback_data' => 'menu_mobile'], ['text' => '🪪 AADHAAR INFO', 'callback_data' => 'menu_aadhaar']],
+            [['text' => '👨‍👩‍👧‍👦 FAMILY INFO', 'callback_data' => 'menu_family'], ['text' => '🛢️ LPG INFO', 'callback_data' => 'menu_lpg']],
+            [['text' => '🚗 VEHICLE INFO', 'callback_data' => 'menu_vehicle'], ['text' => '🔢 VEHICLE NUMBER TO OWNER NUM', 'callback_data' => 'menu_vnum']],
+            [['text' => '🚨 CHALLAN INFO', 'callback_data' => 'menu_challan'], ['text' => '📸 INSTA INFO', 'callback_data' => 'menu_instagram']],
+            [['text' => '🎮 FF INFO', 'callback_data' => 'menu_freefire']],
+            [['text' => '💳 PAYTM UPI TO NUM', 'callback_data' => 'menu_paytm']],
+            [['text' => '💳 PAN INFO', 'callback_data' => 'menu_pan'], ['text' => '🏢 GST INFO', 'callback_data' => 'menu_gst']],
+            [['text' => '📇 PAN TO GST', 'callback_data' => 'menu_pangst'], ['text' => '🏦 IFSC INFO', 'callback_data' => 'menu_ifsc']],
+            [['text' => '📍 PINCODE INFO', 'callback_data' => 'menu_pincode'], ['text' => '✈️ TG INFO', 'callback_data' => 'menu_telegram']],
+            [['text' => '🌐 IP INFO', 'callback_data' => 'menu_ip'], ['text' => '👤 PROFILE', 'callback_data' => 'menu_profile']],
             [['text' => '💰 BUY CREDITS', 'callback_data' => 'buy_credits']]
         ]
     ];
@@ -723,29 +724,31 @@ function handleMenuCallback($callbackQuery) {
     if (strpos($data, 'menu_') === 0) {
         $lookupType = substr($data, 5);
         setUserState($userId, 'lookup', $lookupType);
-        $typeNames = [
-            'mobile' => '📱 Mobile Number',
-            'aadhaar' => '🪪 Aadhaar Number',
-            'family' => '👨‍👩‍👧‍👦 Aadhaar Number',
-            'lpg' => '🛢️ LPG Consumer Number',
-            'vehicle' => '🚗 Vehicle Number (e.g. MH01AB1234)',
-            'vnum' => '📞 Vehicle Number (e.g. MH01AB1234)',
-            'challan' => '🚨 Vehicle Number (e.g. MH01AB1234)',
-            'instagram' => '📸 Instagram Username',
-            'freefire' => '🎮 Free Fire UID',
-            'paytm' => '💳 Paytm Number or VPA',
-            'pan' => '💳 PAN Number (e.g. ABCDE1234F)',
-            'gst' => '🏢 GST Number (e.g. 22AAAAA0000A1Z5)',
-            'pangst' => '📇 PAN Number (e.g. ABCDE1234F)',
-            'ifsc' => '🏦 IFSC Code (e.g. SBIN0001234)',
-            'pincode' => '📍 Pincode (e.g. 400001)',
-            'telegram' => '✈️ Telegram Username',
-            'ip' => '🌐 IP Address (e.g. 192.168.1.1)'
+        
+        $promptMessages = [
+            'mobile' => "📱 <b>Send Mobile Number</b>\n\nExample: <code>9876543210</code>",
+            'aadhaar' => "🪪 <b>Send 12-Digit Aadhar Number</b>\n\nExample: <code>123456789012</code>",
+            'family' => "👨‍👩‍👧‍👦 <b>Send 12-Digit Aadhar Number</b>\n\nExample: <code>123456789012</code>",
+            'lpg' => "🛢️ <b>Send LPG Consumer Number</b>\n\nExample: <code>1234567890</code>",
+            'vehicle' => "🚗 <b>Send Vehicle Number</b>\n\nExample: <code>MH01AB1234</code>",
+            'vnum' => "📞 <b>Send Vehicle Number</b>\n\nExample: <code>MH01AB1234</code>",
+            'challan' => "🚨 <b>Send Vehicle Number</b>\n\nExample: <code>MH01AB1234</code>",
+            'instagram' => "📸 <b>Send Instagram Username</b>\n\nExample: <code>username</code>",
+            'freefire' => "🎮 <b>Send Free Fire UID</b>\n\nExample: <code>1234567890</code>",
+            'paytm' => "💳 <b>Send Paytm Number or VPA</b>\n\nExample: <code>9876543210</code> or <code>user@paytm</code>",
+            'pan' => "💳 <b>Send PAN Number</b>\n\nExample: <code>ABCDE1234F</code>",
+            'gst' => "🏢 <b>Send GST Number</b>\n\nExample: <code>22AAAAA0000A1Z5</code>",
+            'pangst' => "📇 <b>Send PAN Number</b>\n\nExample: <code>ABCDE1234F</code>",
+            'ifsc' => "🏦 <b>Send IFSC Code</b>\n\nExample: <code>SBIN0001234</code>",
+            'pincode' => "📍 <b>Send Pincode</b>\n\nExample: <code>400001</code>",
+            'telegram' => "✈️ <b>Send Telegram Username</b>\n\nExample: <code>username</code>",
+            'ip' => "🌐 <b>Send IP Address</b>\n\nExample: <code>192.168.1.1</code>"
         ];
-        $typeName = $typeNames[$lookupType] ?? ucfirst($lookupType);
-        answerCallbackQuery($callbackId, "Enter $typeName");
+        
+        $prompt = $promptMessages[$lookupType] ?? "📝 <b>Send the value to lookup</b>";
+        answerCallbackQuery($callbackId);
         deleteMessage($chatId, $messageId);
-        sendMessage($chatId, "📝 <b>Enter $typeName</b>\n\nSend the value to lookup.\n\nType /cancel to cancel.", getMenuCancelKeyboard());
+        sendMessage($chatId, $prompt, getMenuCancelKeyboard());
         return;
     }
     
@@ -975,26 +978,6 @@ function handleStateMessage($chatId, $userId, $state, $text) {
         case 'lookup':
             $lookupType = $state['data'];
             clearUserState($userId);
-            $typeNames = [
-                'mobile' => 'NUMBER',
-                'aadhaar' => 'AADHAR NUMBER',
-                'family' => 'AADHAR NUMBER',
-                'lpg' => 'LPG CONSUMER NUMBER',
-                'vehicle' => 'VEHICLE NUMBER',
-                'vnum' => 'VEHICLE NUMBER',
-                'challan' => 'VEHICLE NUMBER',
-                'instagram' => 'INSTAGRAM USERNAME',
-                'freefire' => 'FREE FIRE UID',
-                'paytm' => 'PAYTM NUMBER OR VPA',
-                'pan' => 'PAN NUMBER',
-                'gst' => 'GST NUMBER',
-                'pangst' => 'PAN NUMBER',
-                'ifsc' => 'IFSC CODE',
-                'pincode' => 'PINCODE',
-                'telegram' => 'TELEGRAM USERNAME',
-                'ip' => 'IP ADDRESS'
-            ];
-            $typeName = $typeNames[$lookupType] ?? strtoupper($lookupType);
             $noResultMessages = [
                 'mobile' => "NO INFORMATION FOUND FOR THIS NUMBER",
                 'aadhaar' => "NO INFORMATION FOUND FOR THIS AADHAR NUMBER",
