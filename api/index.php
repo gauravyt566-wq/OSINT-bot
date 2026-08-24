@@ -47,7 +47,6 @@ $FAM_QR_API = "https://fampay.anujbots.xyz/qr.php";
 $FAM_VERIFY_API = "https://fampay.anujbots.xyz/verify.php";
 $SUCCESS_IMAGE = "https://t.me/ZephrexXx_media/21";
 $FAILED_IMAGE = "https://t.me/ZephrexXx_media/23";
-$WELCOME_IMAGE = "https://t.me/ZephrexXx_media/27";
 
 function initDatabase() {
     $dbFile = '/tmp/bot_database.json';
@@ -441,7 +440,7 @@ function verifyPayment($orderId) {
 
 function sendMessage($chatId, $text, $replyMarkup = null) {
     global $BOT_TOKEN;
-    $postData = ['chat_id' => $chatId, 'text' => $text, 'parse_mode' => 'HTML', 'disable_web_page_preview' => true];
+    $postData = ['chat_id' => $chatId, 'text' => $text, 'parse_mode' => 'HTML'];
     if ($replyMarkup) $postData['reply_markup'] = json_encode($replyMarkup);
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, "https://api.telegram.org/bot$BOT_TOKEN/sendMessage");
@@ -455,25 +454,9 @@ function sendMessage($chatId, $text, $replyMarkup = null) {
     return json_decode($response, true);
 }
 
-function sendPhoto($chatId, $photoUrl, $caption = '', $replyMarkup = null) {
-    global $BOT_TOKEN;
-    $postData = ['chat_id' => $chatId, 'photo' => $photoUrl, 'caption' => $caption, 'parse_mode' => 'HTML', 'disable_web_page_preview' => true];
-    if ($replyMarkup) $postData['reply_markup'] = json_encode($replyMarkup);
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, "https://api.telegram.org/bot$BOT_TOKEN/sendPhoto");
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    $response = curl_exec($ch);
-    curl_close($ch);
-    return json_decode($response, true);
-}
-
 function editMessageText($chatId, $messageId, $text, $replyMarkup = null) {
     global $BOT_TOKEN;
-    $postData = ['chat_id' => $chatId, 'message_id' => $messageId, 'text' => $text, 'parse_mode' => 'HTML', 'disable_web_page_preview' => true];
+    $postData = ['chat_id' => $chatId, 'message_id' => $messageId, 'text' => $text, 'parse_mode' => 'HTML'];
     if ($replyMarkup) $postData['reply_markup'] = json_encode($replyMarkup);
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, "https://api.telegram.org/bot$BOT_TOKEN/editMessageText");
@@ -522,6 +505,22 @@ function deleteMessage($chatId, $messageId) {
     return json_decode($response, true);
 }
 
+function sendPhoto($chatId, $photoUrl, $caption = '', $replyMarkup = null) {
+    global $BOT_TOKEN;
+    $postData = ['chat_id' => $chatId, 'photo' => $photoUrl, 'caption' => $caption, 'parse_mode' => 'HTML'];
+    if ($replyMarkup) $postData['reply_markup'] = json_encode($replyMarkup);
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, "https://api.telegram.org/bot$BOT_TOKEN/sendPhoto");
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    $response = curl_exec($ch);
+    curl_close($ch);
+    return json_decode($response, true);
+}
+
 function answerCallbackQuery($callbackQueryId, $text = '', $showAlert = false) {
     global $BOT_TOKEN;
     $postData = ['callback_query_id' => $callbackQueryId, 'text' => $text, 'show_alert' => $showAlert];
@@ -553,36 +552,6 @@ function getAdminKeyboard() {
         [['text' => '🚫 BLOCK USER', 'callback_data' => 'admin_block_user'], ['text' => '✅ UNBLOCK USER', 'callback_data' => 'admin_unblock_user']],
         [['text' => '❌ CANCEL', 'callback_data' => 'admin_cancel']]
     ]];
-}
-
-function getMainMenuKeyboard() {
-    return [
-        'inline_keyboard' => [
-            [['text' => '📱 NUM INFO', 'callback_data' => 'menu_mobile'], ['text' => '🪪 AADHAAR INFO', 'callback_data' => 'menu_aadhaar']],
-
-            [['text' => '💳 PAYTM UPI TO NUM', 'callback_data' => 'menu_paytm']],
-
-            [['text' => '👨‍👩‍👧‍👦 FAMILY INFO', 'callback_data' => 'menu_family'], ['text' => '🛢️ LPG INFO', 'callback_data' => 'menu_lpg']],
-
-            [['text' => '🚗 VEHICLE INFO', 'callback_data' => 'menu_vehicle'], ['text' => '🔢 VEHICLE → OWNER NUM', 'callback_data' => 'menu_vnum']],
-
-            [['text' => '🚨 CHALLAN INFO', 'callback_data' => 'menu_challan'], ['text' => '📸 INSTA INFO', 'callback_data' => 'menu_instagram']],
-
-            [['text' => '🎮 FF INFO', 'callback_data' => 'menu_freefire'], ['text' => '💳 PAN INFO', 'callback_data' => 'menu_pan']],
-
-            [['text' => '🏢 GST INFO', 'callback_data' => 'menu_gst'], ['text' => '📇 PAN TO GST', 'callback_data' => 'menu_pangst']],
-
-            [['text' => '🏦 IFSC INFO', 'callback_data' => 'menu_ifsc'], ['text' => '📍 PINCODE INFO', 'callback_data' => 'menu_pincode']],
-
-            [['text' => '✈️ TG INFO', 'callback_data' => 'menu_telegram'], ['text' => '🌐 IP INFO', 'callback_data' => 'menu_ip']],
-
-            [['text' => '👤 PROFILE', 'callback_data' => 'menu_profile'], ['text' => '💰 BUY CREDITS', 'callback_data' => 'buy_credits']]
-        ]
-    ];
-}
-
-function getMenuCancelKeyboard() {
-    return ['inline_keyboard' => [[['text' => '❌ CANCEL', 'callback_data' => 'menu_cancel']]]];
 }
 
 function sendLongMessage($chatId, $text, $replyMarkup = null) {
@@ -687,10 +656,10 @@ function handleStart($chatId, $userId, $name, $username, $text = '') {
     }
     if (!getUser($userId)) createUser($userId, $name, $username, $referredBy);
     $user = getUser($userId);
-    
-    $caption = "🌟 ᴡᴇʟᴄᴏᴍᴇ ᴛᴏ 𝐆ᴀᴜʀᴀᴠ 𝐃ᴇᴛᴀɪʟ𝐬 𝐁ᴏᴛ 🌟\n\n🔍 ʟᴏᴏᴋᴜᴘ ᴀɴʏ ᴍᴏʙɪʟᴇ ɴᴜᴍʙᴇʀ\n🪪 ᴛʀᴀᴄᴋ ᴀᴀᴅʜᴀᴀʀ ᴅᴇᴛᴀɪʟꜱ\n👨‍👩‍👧‍👦 ꜰɪɴᴅ ꜰᴀᴍɪʟʏ ᴅᴇᴛᴀɪʟꜱ\n\n✨ ᴜꜱᴇ ᴛʜᴇ ᴍᴇɴᴜ ʙᴇʟᴏᴡ ᴛᴏ ɴᴀᴠɪɢᴀᴛᴇ.\n\n🎁 ʏᴏᴜ ʜᴀᴠᴇ <b>{$user['credits']}</b> ꜰʀᴇᴇ ʟᴏᴏᴋᴜᴘ ᴀᴠᴀɪʟᴀʙʟᴇ!";
-    
-    sendPhoto($chatId, $GLOBALS['WELCOME_IMAGE'], $caption, getMainMenuKeyboard());
+    $mention = "<a href=\"tg://user?id=$userId\">$name</a>";
+    $welcomeMsg = "✨ <b>𝐆ᴀᴜʀᴀᴠ 𝐃ᴇᴛᴀɪʟ𝐬 𝐁ᴏᴛ</b> ✨\n━━━━━━━━━━━━━━━━━━\n👋 Namaste $mention! Main aapki madad ke liye taiyar hoon.\n\n💳 <b>Available Credits:</b> {$user['credits']}\n━━━━━━━━━━━━━━━━━━\n\n👇 <b>HAMARI SERVICES</b> 👇\n\n🔎 <b>Personal Details:</b>\n☎️ <code>/num</code> ➜ Phone number ki jankari\n📄 <code>/aadhar</code> ➜ Aadhar card check\n👨‍👩‍👧 <code>/family</code> ➜ Aadhar se Family details\n💳 <code>/paytm</code> ➜ Paytm UPI se number\n🛢️ <code>/lpg</code> ➜ LPG Consumer details\n💳 <code>/pan</code> ➜ PAN card verification\n🏢 <code>/gst</code> ➜ GSTIN details\n📇 <code>/pangst</code> ➜ PAN to GST check\n\n🚙 <b>Device & Vehicle Details:</b>\n🏍 <code>/vehicle</code> ➜ RC details check\n🚗 <code>/vnum</code> ➜ RC to owner number\n🚔 <code>/challan</code> ➜ Vehicle challan check\n\n🏢 <b>Other Utilities:</b>\n🌐 <code>/ip</code> ➜ IP Address Tracker\n📍 <code>/pincode</code> ➜ Pincode check\n✈️ <code>/tg</code> ➜ Telegram UID to number\n📸 <code>/insta</code> ➜ Instagram profile\n🏦 <code>/ifsc</code> ➜ IFSC Code details\n🎮 <code>/ff</code> ➜ Free Fire UID details\n\n⚙️ <b>Settings & Earn:</b>\n👤 <code>/profile</code> ➜ Apna status dekhein\n💰 <code>/buy</code> ➜ Credits buy karein\n\n👨‍💻 <b>DEVELOPER:</b> @ZephrexXx";
+    $keyboard = ['inline_keyboard' => [[['text' => '💰 BUY CREDITS', 'callback_data' => 'buy_credits']], [['text' => '📞 CONTACT SUPPORT', 'url' => 'https://t.me/ZephrexXx']]]];
+    sendMessage($chatId, $welcomeMsg, $keyboard);
 }
 
 function handleProfile($chatId, $userId) {
@@ -714,59 +683,6 @@ function handleBuy($chatId) {
     sendMessage($chatId, $plansText, $keyboard);
 }
 
-function handleMenuCallback($callbackQuery) {
-    $callbackId = $callbackQuery['id'];
-    $userId = $callbackQuery['from']['id'];
-    $chatId = $callbackQuery['message']['chat']['id'];
-    $messageId = $callbackQuery['message']['message_id'];
-    $data = $callbackQuery['data'];
-    
-    if ($data === 'menu_cancel') {
-        clearUserState($userId);
-        answerCallbackQuery($callbackId, 'Cancelled!');
-        deleteMessage($chatId, $messageId);
-        sendMessage($chatId, "❌ Action cancelled.");
-        return;
-    }
-    
-    if (strpos($data, 'menu_') === 0) {
-        $lookupType = substr($data, 5);
-        setUserState($userId, 'lookup', $lookupType);
-        
-        $promptMessages = [
-            'mobile' => "📱 <b>Send Mobile Number</b>\n\nExample: <code>9876543210</code>",
-            'aadhaar' => "🪪 <b>Send 12-Digit Aadhar Number</b>\n\nExample: <code>123456789012</code>",
-            'family' => "👨‍👩‍👧‍👦 <b>Send 12-Digit Aadhar Number</b>\n\nExample: <code>123456789012</code>",
-            'lpg' => "🛢️ <b>Send LPG Consumer Number</b>\n\nExample: <code>1234567890</code>",
-            'vehicle' => "🚗 <b>Send Vehicle Number</b>\n\nExample: <code>MH01AB1234</code>",
-            'vnum' => "📞 <b>Send Vehicle Number</b>\n\nExample: <code>MH01AB1234</code>",
-            'challan' => "🚨 <b>Send Vehicle Number</b>\n\nExample: <code>MH01AB1234</code>",
-            'instagram' => "📸 <b>Send Instagram Username</b>\n\nExample: <code>username</code>",
-            'freefire' => "🎮 <b>Send Free Fire UID</b>\n\nExample: <code>1234567890</code>",
-            'paytm' => "💳 <b>Send Paytm Number or VPA</b>\n\nExample: <code>9876543210</code> or <code>user@paytm</code>",
-            'pan' => "💳 <b>Send PAN Number</b>\n\nExample: <code>ABCDE1234F</code>",
-            'gst' => "🏢 <b>Send GST Number</b>\n\nExample: <code>22AAAAA0000A1Z5</code>",
-            'pangst' => "📇 <b>Send PAN Number</b>\n\nExample: <code>ABCDE1234F</code>",
-            'ifsc' => "🏦 <b>Send IFSC Code</b>\n\nExample: <code>SBIN0001234</code>",
-            'pincode' => "📍 <b>Send Pincode</b>\n\nExample: <code>400001</code>",
-            'telegram' => "✈️ <b>Send Telegram Username</b>\n\nExample: <code>username</code>",
-            'ip' => "🌐 <b>Send IP Address</b>\n\nExample: <code>192.168.1.1</code>"
-        ];
-        
-        $prompt = $promptMessages[$lookupType] ?? "📝 <b>Send the value to lookup</b>";
-        answerCallbackQuery($callbackId);
-        deleteMessage($chatId, $messageId);
-        sendMessage($chatId, $prompt, getMenuCancelKeyboard());
-        return;
-    }
-    
-    if ($data === 'menu_profile') {
-        answerCallbackQuery($callbackId);
-        handleProfile($chatId, $userId);
-        return;
-    }
-}
-
 function handleCallback($callbackQuery) {
     global $CREDIT_PLANS, $SUCCESS_IMAGE, $FAILED_IMAGE, $LOG_CHANNEL;
     $callbackId = $callbackQuery['id'];
@@ -778,11 +694,6 @@ function handleCallback($callbackQuery) {
     if ($data === 'check_join') {
         if (checkForceJoin($userId)) { answerCallbackQuery($callbackId, '✅ Thanks for joining!'); sendMessage($chatId, "✅ Now you can use the bot!\n/start karein bot use karne ke liye."); }
         else answerCallbackQuery($callbackId, '❌ Please join the channel first!', true);
-        return;
-    }
-    
-    if (strpos($data, 'menu_') === 0 || $data === 'menu_profile' || $data === 'menu_cancel') {
-        handleMenuCallback($callbackQuery);
         return;
     }
     
@@ -968,10 +879,23 @@ function handleCommand($message) {
             if (!isAdmin($userId)) { sendMessage($chatId, "❌ Aap admin nahi hain!"); return; }
             sendMessage($chatId, "👑 <b>Admin Panel</b> 👑\n━━━━━━━━━━━━━━━━━━\n\nNiche diye gaye buttons ka use karke bot manage karein.", getAdminKeyboard());
             break;
-        case '/cancel':
-            clearUserState($userId);
-            sendMessage($chatId, "❌ Action cancelled.");
-            break;
+        case '/num': if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/num 9876543210</code>"); return; } processLookupRequest($chatId, $userId, 'mobile', $args[0], "NO INFORMATION FOUND FOR THIS NUMBER"); break;
+        case '/aadhar': if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/aadhar 123456789012</code>"); return; } processLookupRequest($chatId, $userId, 'aadhaar', $args[0], "NO INFORMATION FOUND FOR THIS AADHAR NUMBER"); break;
+        case '/family': if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/family 123456789012</code>"); return; } processLookupRequest($chatId, $userId, 'family', $args[0], "NO INFORMATION FOUND FOR THIS AADHAR NUMBER"); break;
+        case '/lpg': if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/lpg 1234567890</code>"); return; } processLookupRequest($chatId, $userId, 'lpg', $args[0], "NO INFORMATION FOUND FOR THIS LPG CONSUMER NUMBER"); break;
+        case '/paytm': if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/paytm sharibmughal87@ptyes</code>"); return; } processLookupRequest($chatId, $userId, 'paytm', $args[0], "NO INFORMATION FOUND FOR THIS PAYTM NUMBER"); break;
+        case '/pan': if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/pan ABCDE1234F</code>"); return; } processLookupRequest($chatId, $userId, 'pan', $args[0], "NO INFORMATION FOUND FOR THIS PAN NUMBER"); break;
+        case '/gst': if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/gst 22AAAAA0000A1Z5</code>"); return; } processLookupRequest($chatId, $userId, 'gst', $args[0], "NO INFORMATION FOUND FOR THIS GST NUMBER"); break;
+        case '/pangst': if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/pangst ABCDE1234F</code>"); return; } processLookupRequest($chatId, $userId, 'pangst', $args[0], "NO INFORMATION FOUND FOR THIS PAN NUMBER"); break;
+        case '/vehicle': if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/vehicle MH01AB1234</code>"); return; } processLookupRequest($chatId, $userId, 'vehicle', $args[0], "NO INFORMATION FOUND FOR THIS VEHICLE NUMBER"); break;
+        case '/vnum': if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/vnum MH01AB1234</code>"); return; } processLookupRequest($chatId, $userId, 'vnum', $args[0], "NO INFORMATION FOUND FOR THIS VEHICLE NUMBER"); break;
+        case '/challan': if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/challan MH01AB1234</code>"); return; } processLookupRequest($chatId, $userId, 'challan', $args[0], "NO INFORMATION FOUND FOR THIS VEHICLE NUMBER"); break;
+        case '/ip': if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/ip 192.168.1.1</code>"); return; } processLookupRequest($chatId, $userId, 'ip', $args[0], "NO INFORMATION FOUND FOR THIS IP ADDRESS"); break;
+        case '/pincode': if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/pincode 400001</code>"); return; } processLookupRequest($chatId, $userId, 'pincode', $args[0], "NO INFORMATION FOUND FOR THIS PINCODE"); break;
+        case '/tg': if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/tg username123</code>"); return; } processLookupRequest($chatId, $userId, 'telegram', $args[0], "NO INFORMATION FOUND FOR THIS TELEGRAM USERNAME"); break;
+        case '/insta': if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/insta username</code>"); return; } processLookupRequest($chatId, $userId, 'instagram', $args[0], "NO INFORMATION FOUND FOR THIS INSTAGRAM USERNAME"); break;
+        case '/ifsc': if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/ifsc SBIN0001234</code>"); return; } processLookupRequest($chatId, $userId, 'ifsc', $args[0], "NO INFORMATION FOUND FOR THIS IFSC CODE"); break;
+        case '/ff': if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/ff 1234567890</code>"); return; } processLookupRequest($chatId, $userId, 'freefire', $args[0], "NO INFORMATION FOUND FOR THIS FREE FIRE UID"); break;
         default:
             $state = getUserState($userId);
             if ($state) handleStateMessage($chatId, $userId, $state, $text);
@@ -983,31 +907,6 @@ function handleStateMessage($chatId, $userId, $state, $text) {
     $action = $state['action'];
     if ($text === '/cancel') { clearUserState($userId); sendMessage($chatId, "❌ Action cancelled."); return; }
     switch ($action) {
-        case 'lookup':
-            $lookupType = $state['data'];
-            clearUserState($userId);
-            $noResultMessages = [
-                'mobile' => "NO INFORMATION FOUND FOR THIS NUMBER",
-                'aadhaar' => "NO INFORMATION FOUND FOR THIS AADHAR NUMBER",
-                'family' => "NO INFORMATION FOUND FOR THIS AADHAR NUMBER",
-                'lpg' => "NO INFORMATION FOUND FOR THIS LPG CONSUMER NUMBER",
-                'vehicle' => "NO INFORMATION FOUND FOR THIS VEHICLE NUMBER",
-                'vnum' => "NO INFORMATION FOUND FOR THIS VEHICLE NUMBER",
-                'challan' => "NO INFORMATION FOUND FOR THIS VEHICLE NUMBER",
-                'instagram' => "NO INFORMATION FOUND FOR THIS INSTAGRAM USERNAME",
-                'freefire' => "NO INFORMATION FOUND FOR THIS FREE FIRE UID",
-                'paytm' => "NO INFORMATION FOUND FOR THIS PAYTM NUMBER",
-                'pan' => "NO INFORMATION FOUND FOR THIS PAN NUMBER",
-                'gst' => "NO INFORMATION FOUND FOR THIS GST NUMBER",
-                'pangst' => "NO INFORMATION FOUND FOR THIS PAN NUMBER",
-                'ifsc' => "NO INFORMATION FOUND FOR THIS IFSC CODE",
-                'pincode' => "NO INFORMATION FOUND FOR THIS PINCODE",
-                'telegram' => "NO INFORMATION FOUND FOR THIS TELEGRAM USERNAME",
-                'ip' => "NO INFORMATION FOUND FOR THIS IP ADDRESS"
-            ];
-            $noResultMsg = $noResultMessages[$lookupType] ?? "NO INFORMATION FOUND";
-            processLookupRequest($chatId, $userId, $lookupType, $text, $noResultMsg);
-            break;
         case 'viewhistory':
             $db = loadDatabase();
             $targetId = trim($text);
