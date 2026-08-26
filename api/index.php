@@ -7,7 +7,7 @@ $BOT_USERNAME = "@GauravDetailsBot";
 $ADMIN_IDS = ["7255220723"];
 $FORCE_CHANNEL = "@ZephrexXx_Portal2";
 $LOG_CHANNEL = "@CyberTraceX_Logs";
-$API_KEY = "ZEPH-K2L1P8";
+$API_KEY = "GAURAV5208";
 $FAM_API_KEY = "FAM_49369415eefe95c67d87f1dd0879712c1baf5916f0fca390";
 $FREE_CREDITS = 2;
 $REFER_BONUS = 2;
@@ -141,11 +141,12 @@ function createUser($userId, $name, $username, $referredBy = null) {
     $db = loadDatabase();
     $userId = (string)$userId;
     if (!isset($db['users'][$userId])) {
+        $freeCredits = isset($GLOBALS['FREE_CREDITS']) ? $GLOBALS['FREE_CREDITS'] : 2;
         $db['users'][$userId] = [
             'user_id' => $userId,
             'name' => $name,
             'username' => $username,
-            'credits' => (string)$GLOBALS['FREE_CREDITS'],
+            'credits' => (string)$freeCredits,
             'joined_date' => date('Y-m-d H:i:s'),
             'banned' => 0,
             'last_request' => 0,
@@ -1048,8 +1049,21 @@ function handleStart($chatId, $userId, $name, $username, $text = '') {
     }
     if (!getUser($userId)) createUser($userId, $name, $username, $referredBy);
     $user = getUser($userId);
+    
+    // Fix: Ensure credits display properly
+    $creditsDisplay = '0';
+    if ($user) {
+        if ($user['credits'] === 'UNLIMITED') {
+            $creditsDisplay = 'UNLIMITED';
+        } elseif (is_numeric($user['credits'])) {
+            $creditsDisplay = (string)(int)$user['credits'];
+        } elseif (isset($user['credits']) && !empty($user['credits'])) {
+            $creditsDisplay = $user['credits'];
+        }
+    }
+    
     $mention = "<a href=\"tg://user?id=$userId\">$name</a>";
-    $welcomeMsg = "✨ <b>𝐆ᴀᴜʀᴀᴠ 𝐃ᴇᴛᴀɪʟ𝐬 𝐁ᴏᴛ</b> ✨\n━━━━━━━━━━━━━━━━━━\n👋 Namaste $mention! Main aapki madad ke liye taiyar hoon.\n\n💳 <b>Available Credits:</b> {$user['credits']}\n━━━━━━━━━━━━━━━━━━\n\n👇 <b>HAMARI SERVICES</b> 👇\n\n🔎 <b>Personal Details:</b>\n☎️ <code>/num</code> ➜ Phone number ki jankari\n📄 <code>/aadhar</code> ➜ Aadhar card check\n👨‍👩‍👧 <code>/family</code> ➜ Aadhar se Family details\n💳 <code>/paytm</code> ➜ Paytm UPI se number\n🛢️ <code>/lpg</code> ➜ LPG Consumer details\n💳 <code>/pan</code> ➜ PAN card verification\n🏢 <code>/gst</code> ➜ GSTIN details\n📇 <code>/pangst</code> ➜ PAN to GST check\n\n🚙 <b>Device & Vehicle Details:</b>\n🏍 <code>/vehicle</code> ➜ RC details check\n🚗 <code>/vnum</code> ➜ RC to owner number\n🚔 <code>/challan</code> ➜ Vehicle challan check\n\n🏢 <b>Other Utilities:</b>\n🌐 <code>/ip</code> ➜ IP Address Tracker\n📍 <code>/pincode</code> ➜ Pincode check\n✈️ <code>/tg</code> ➜ Telegram UID to number\n📸 <code>/insta</code> ➜ Instagram profile\n🏦 <code>/ifsc</code> ➜ IFSC Code details\n🎮 <code>/ff</code> ➜ Free Fire UID details\n\n⚙️ <b>Settings & Earn:</b>\n👤 <code>/profile</code> ➜ Apna status dekhein\n💰 <code>/buy</code> ➜ Credits buy karein\n\n👨‍💻 <b>DEVELOPER:</b> @ZephrexXx";
+    $welcomeMsg = "✨ <b>𝐆ᴀᴜʀᴀᴠ 𝐃ᴇᴛᴀɪʟ𝐬 𝐁ᴏᴛ</b> ✨\n━━━━━━━━━━━━━━━━━━\n👋 Namaste $mention! Main aapki madad ke liye taiyar hoon.\n\n💳 <b>Available Credits:</b> <code>$creditsDisplay</code>\n━━━━━━━━━━━━━━━━━━\n\n👇 <b>HAMARI SERVICES</b> 👇\n\n🔎 <b>Personal Details:</b>\n☎️ <code>/num</code> ➜ Phone number ki jankari\n📄 <code>/aadhar</code> ➜ Aadhar card check\n👨‍👩‍👧 <code>/family</code> ➜ Aadhar se Family details\n💳 <code>/paytm</code> ➜ Paytm UPI se number\n🛢️ <code>/lpg</code> ➜ LPG Consumer details\n💳 <code>/pan</code> ➜ PAN card verification\n🏢 <code>/gst</code> ➜ GSTIN details\n📇 <code>/pangst</code> ➜ PAN to GST check\n\n🚙 <b>Device & Vehicle Details:</b>\n🏍 <code>/vehicle</code> ➜ RC details check\n🚗 <code>/vnum</code> ➜ RC to owner number\n🚔 <code>/challan</code> ➜ Vehicle challan check\n\n🏢 <b>Other Utilities:</b>\n🌐 <code>/ip</code> ➜ IP Address Tracker\n📍 <code>/pincode</code> ➜ Pincode check\n✈️ <code>/tg</code> ➜ Telegram UID to number\n📸 <code>/insta</code> ➜ Instagram profile\n🏦 <code>/ifsc</code> ➜ IFSC Code details\n🎮 <code>/ff</code> ➜ Free Fire UID details\n\n⚙️ <b>Settings & Earn:</b>\n👤 <code>/profile</code> ➜ Apna status dekhein\n💰 <code>/buy</code> ➜ Credits buy karein\n\n👨‍💻 <b>DEVELOPER:</b> @ZephrexXx";
     $keyboard = ['inline_keyboard' => [
         [['text' => '💰 BUY CREDITS', 'callback_data' => 'buy_credits']],
         [['text' => '📞 CONTACT SUPPORT', 'url' => 'https://t.me/ZephrexXx']]
@@ -1064,7 +1078,17 @@ function handleProfile($chatId, $userId) {
         return;
     }
     $role = isAdmin($userId) ? '👑 Admin' : '👤 User';
-    $balance = $user['credits'] === 'UNLIMITED' ? 'Unlimited' : $user['credits'] . ' Credits';
+    
+    // Fix: Properly format credits for display
+    $balance = '0 Credits';
+    if ($user['credits'] === 'UNLIMITED') {
+        $balance = 'Unlimited';
+    } elseif (is_numeric($user['credits'])) {
+        $balance = (int)$user['credits'] . ' Credits';
+    } elseif (!empty($user['credits'])) {
+        $balance = $user['credits'] . ' Credits';
+    }
+    
     sendMessage($chatId, "👤 <b>Profile Info:</b>\n━━━━━━━━━━━━━━━━━━\n📛 <b>Name:</b> {$user['name']}\n🆔 <b>User ID:</b> <code>$userId</code>\n👑 <b>Role:</b> $role\n💰 <b>Balance:</b> <b>$balance</b>\n🎁 <b>Referral Code:</b> <code>{$user['referral_code']}</code>\n📅 <b>Joined:</b> {$user['joined_date']}");
 }
 
