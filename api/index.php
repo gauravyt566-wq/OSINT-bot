@@ -14,10 +14,8 @@ $REFER_BONUS = 2;
 $COOLDOWN = 3;
 $UPI_ID = "gaurav.intel@fam";
 
-$GITHUB_TOKEN = "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";
-$GITHUB_REPO = "gauravyt566-wq/OSINT-bot";
-$GITHUB_FILE = "database.json";
-$GITHUB_BRANCH = "main";
+$SUPABASE_URL = "https://catmgsuucfvtiubtbpto.supabase.co";
+$SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhdG1nc3V1Y2Z2dGl1YnRicHRvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NDI3ODk2MCwiZXhwIjoyMDg5ODU0OTYwfQ.ljcKAFECNFXycBe7UNloj-CcczdxZJ6k_gGhJag4C7c";
 
 $CREDIT_PLANS = [
     "10" => ["price" => 50, "credits" => 10, "display" => "₹50 — 10 CREDITS"],
@@ -53,96 +51,114 @@ $FAM_VERIFY_API = "https://fampay.anujbots.xyz/verify.php";
 $SUCCESS_IMAGE = "https://t.me/ZephrexXx_media/21";
 $FAILED_IMAGE = "https://t.me/ZephrexXx_media/23";
 
-function githubApiRequest($method, $path, $data = null) {
-    global $GITHUB_TOKEN;
-    $url = "https://api.github.com/repos/$GITHUB_REPO/contents/$path";
+function supabaseRequest($method, $path, $data = null, $params = []) {
+    global $SUPABASE_URL, $SUPABASE_KEY;
+    $url = $SUPABASE_URL . $path;
+    if (!empty($params)) {
+        $url .= '?' . http_build_query($params);
+    }
     $headers = [
-        "Authorization: token $GITHUB_TOKEN",
-        "User-Agent: OSINT-Bot",
-        "Accept: application/vnd.github.v3+json"
+        "apikey: $SUPABASE_KEY",
+        "Authorization: Bearer $SUPABASE_KEY",
+        "Content-Type: application/json",
+        "Prefer: return=representation"
     ];
-    
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    
-    if ($method === 'PUT') {
-        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PUT');
+    if ($method === 'POST') {
+        curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+    } elseif ($method === 'PATCH') {
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PATCH');
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+    } elseif ($method === 'DELETE') {
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'DELETE');
     }
-    
     $response = curl_exec($ch);
     curl_close($ch);
     return json_decode($response, true);
 }
 
-function loadDatabaseFromGithub() {
-    global $GITHUB_FILE;
-    $response = githubApiRequest('GET', $GITHUB_FILE);
-    
-    if (isset($response['content'])) {
-        $content = base64_decode($response['content']);
-        $data = json_decode($content, true);
-        if ($data) {
-            if (!isset($data['pending_payments'])) $data['pending_payments'] = [];
-            if (!isset($data['user_states'])) $data['user_states'] = [];
-            if (!isset($data['payment_stats'])) {
-                $data['payment_stats'] = [
-                    'today_income' => 0,
-                    'total_income' => 0,
-                    'plan_counts' => [],
-                    'today_date' => date('Y-m-d')
-                ];
-            }
-            return $data;
+function loadDatabase() {
+    $response = supabaseRequest('GET', '/rest/v1/users', null, ['select' => '*']);
+    $users = [];
+    if (is_array($response)) {
+        foreach ($response as $user) {
+            $users[$user['user_id']] = $user;
         }
     }
-    
-    return ['users' => [], 'history' => [], 'user_states' => [], 'payment_stats' => ['today_income' => 0, 'total_income' => 0, 'plan_counts' => [], 'today_date' => date('Y-m-d')], 'pending_payments' => []];
-}
-
-function saveDatabaseToGithub($data) {
-    global $GITHUB_FILE, $GITHUB_BRANCH;
-    
-    $existing = githubApiRequest('GET', $GITHUB_FILE);
-    $sha = isset($existing['sha']) ? $existing['sha'] : null;
-    
-    $content = json_encode($data, JSON_PRETTY_PRINT);
-    $payload = [
-        'message' => 'Update database',
-        'content' => base64_encode($content),
-        'branch' => $GITHUB_BRANCH
-    ];
-    
-    if ($sha) {
-        $payload['sha'] = $sha;
+    $historyResponse = supabaseRequest('GET', '/rest/v1/history', null, ['select' => '*', 'order' => 'timestamp.desc', 'limit' => 1000]);
+    $history = is_array($historyResponse) ? $historyResponse : [];
+    $statesResponse = supabaseRequest('GET', '/rest/v1/user_states', null, ['select' => '*']);
+    $userStates = [];
+    if (is_array($statesResponse)) {
+        foreach ($statesResponse as $state) {
+            $userStates[$state['user_id']] = ['action' => $state['action'], 'data' => $state['data']];
+        }
     }
-    
-    githubApiRequest('PUT', $GITHUB_FILE, $payload);
-}
-
-function loadDatabase() {
-    return loadDatabaseFromGithub();
+    $paymentsResponse = supabaseRequest('GET', '/rest/v1/pending_payments', null, ['select' => '*']);
+    $pendingPayments = [];
+    if (is_array($paymentsResponse)) {
+        foreach ($paymentsResponse as $payment) {
+            $pendingPayments[$payment['order_id']] = $payment;
+        }
+    }
+    $statsResponse = supabaseRequest('GET', '/rest/v1/payment_stats', null, ['select' => '*', 'limit' => 1]);
+    $paymentStats = is_array($statsResponse) && count($statsResponse) > 0 ? $statsResponse[0] : ['today_income' => 0, 'total_income' => 0, 'plan_counts' => [], 'today_date' => date('Y-m-d')];
+    if (is_string($paymentStats['plan_counts'])) {
+        $paymentStats['plan_counts'] = json_decode($paymentStats['plan_counts'], true) ?: [];
+    }
+    return ['users' => $users, 'history' => $history, 'user_states' => $userStates, 'payment_stats' => $paymentStats, 'pending_payments' => $pendingPayments];
 }
 
 function saveDatabase($data) {
-    saveDatabaseToGithub($data);
+    $users = supabaseRequest('GET', '/rest/v1/users', null, ['select' => 'user_id']);
+    $existingUserIds = [];
+    if (is_array($users)) {
+        foreach ($users as $user) {
+            $existingUserIds[] = $user['user_id'];
+        }
+    }
+    foreach ($data['users'] as $user) {
+        if (in_array($user['user_id'], $existingUserIds)) {
+            supabaseRequest('PATCH', '/rest/v1/users', $user, ['user_id' => 'eq.' . $user['user_id']]);
+        } else {
+            supabaseRequest('POST', '/rest/v1/users', $user);
+        }
+    }
+    supabaseRequest('DELETE', '/rest/v1/history', null, ['user_id' => 'neq.000000000']);
+    foreach ($data['history'] as $historyItem) {
+        supabaseRequest('POST', '/rest/v1/history', $historyItem);
+    }
+    supabaseRequest('DELETE', '/rest/v1/user_states', null, ['user_id' => 'neq.000000000']);
+    foreach ($data['user_states'] as $userId => $state) {
+        supabaseRequest('POST', '/rest/v1/user_states', ['user_id' => $userId, 'action' => $state['action'], 'data' => $state['data']]);
+    }
+    supabaseRequest('DELETE', '/rest/v1/pending_payments', null, ['order_id' => 'neq.000000000']);
+    foreach ($data['pending_payments'] as $payment) {
+        supabaseRequest('POST', '/rest/v1/pending_payments', $payment);
+    }
+    $stats = $data['payment_stats'];
+    if (is_array($stats['plan_counts'])) {
+        $stats['plan_counts'] = json_encode($stats['plan_counts']);
+    }
+    supabaseRequest('DELETE', '/rest/v1/payment_stats', null, ['id' => 'gt.0']);
+    supabaseRequest('POST', '/rest/v1/payment_stats', $stats);
 }
 
 function getUser($userId) {
-    $db = loadDatabase();
-    $userId = (string)$userId;
-    return isset($db['users'][$userId]) ? $db['users'][$userId] : null;
+    $response = supabaseRequest('GET', '/rest/v1/users', null, ['user_id' => 'eq.' . $userId, 'limit' => 1]);
+    return is_array($response) && count($response) > 0 ? $response[0] : null;
 }
 
 function createUser($userId, $name, $username, $referredBy = null) {
-    $db = loadDatabase();
     $userId = (string)$userId;
-    if (!isset($db['users'][$userId])) {
+    if (!getUser($userId)) {
         $freeCredits = isset($GLOBALS['FREE_CREDITS']) ? $GLOBALS['FREE_CREDITS'] : 2;
-        $db['users'][$userId] = [
+        $user = [
             'user_id' => $userId,
             'name' => $name,
             'username' => $username,
@@ -153,55 +169,47 @@ function createUser($userId, $name, $username, $referredBy = null) {
             'referral_code' => 'REF' . $userId,
             'referred_by' => $referredBy
         ];
+        supabaseRequest('POST', '/rest/v1/users', $user);
         if ($referredBy) {
             $referrer = getUser($referredBy);
             if ($referrer && $referrer['credits'] !== 'UNLIMITED') {
                 $current = is_numeric($referrer['credits']) ? (int)$referrer['credits'] : 0;
-                $db['users'][(string)$referredBy]['credits'] = (string)($current + $GLOBALS['REFER_BONUS']);
+                updateUserCredits($referredBy, $GLOBALS['REFER_BONUS']);
             }
         }
-        saveDatabase($db);
     }
     return getUser($userId);
 }
 
 function updateUserCredits($userId, $creditsToAdd) {
-    $db = loadDatabase();
     $userId = (string)$userId;
-    if (isset($db['users'][$userId])) {
-        if ($db['users'][$userId]['credits'] === 'UNLIMITED') return true;
-        $current = is_numeric($db['users'][$userId]['credits']) ? (int)$db['users'][$userId]['credits'] : 0;
-        $db['users'][$userId]['credits'] = (string)($current + $creditsToAdd);
-        saveDatabase($db);
+    $user = getUser($userId);
+    if ($user) {
+        if ($user['credits'] === 'UNLIMITED') return true;
+        $current = is_numeric($user['credits']) ? (int)$user['credits'] : 0;
+        $newCredits = (string)($current + $creditsToAdd);
+        supabaseRequest('PATCH', '/rest/v1/users', ['credits' => $newCredits], ['user_id' => 'eq.' . $userId]);
         return true;
     }
     return false;
 }
 
 function setUnlimitedCredits($userId) {
-    $db = loadDatabase();
-    if (isset($db['users'][(string)$userId])) {
-        $db['users'][(string)$userId]['credits'] = 'UNLIMITED';
-        saveDatabase($db);
-    }
+    supabaseRequest('PATCH', '/rest/v1/users', ['credits' => 'UNLIMITED'], ['user_id' => 'eq.' . (string)$userId]);
 }
 
 function removeUnlimitedCredits($userId) {
-    $db = loadDatabase();
-    if (isset($db['users'][(string)$userId])) {
-        $db['users'][(string)$userId]['credits'] = '0';
-        saveDatabase($db);
-    }
+    supabaseRequest('PATCH', '/rest/v1/users', ['credits' => '0'], ['user_id' => 'eq.' . (string)$userId]);
 }
 
 function deductCredit($userId) {
-    $db = loadDatabase();
     $userId = (string)$userId;
-    if (isset($db['users'][$userId])) {
-        if ($db['users'][$userId]['credits'] === 'UNLIMITED') return true;
-        if (is_numeric($db['users'][$userId]['credits']) && (int)$db['users'][$userId]['credits'] > 0) {
-            $db['users'][$userId]['credits'] = (string)((int)$db['users'][$userId]['credits'] - 1);
-            saveDatabase($db);
+    $user = getUser($userId);
+    if ($user) {
+        if ($user['credits'] === 'UNLIMITED') return true;
+        if (is_numeric($user['credits']) && (int)$user['credits'] > 0) {
+            $newCredits = (string)((int)$user['credits'] - 1);
+            supabaseRequest('PATCH', '/rest/v1/users', ['credits' => $newCredits], ['user_id' => 'eq.' . $userId]);
             return true;
         }
     }
@@ -209,16 +217,12 @@ function deductCredit($userId) {
 }
 
 function updateLastRequest($userId) {
-    $db = loadDatabase();
-    if (isset($db['users'][(string)$userId])) {
-        $db['users'][(string)$userId]['last_request'] = time();
-        saveDatabase($db);
-    }
+    supabaseRequest('PATCH', '/rest/v1/users', ['last_request' => time()], ['user_id' => 'eq.' . (string)$userId]);
 }
 
 function checkCooldown($userId) {
     $user = getUser($userId);
-    if ($user) {
+    if ($user && isset($user['last_request'])) {
         $diff = time() - $user['last_request'];
         if ($diff < $GLOBALS['COOLDOWN']) return $GLOBALS['COOLDOWN'] - $diff;
     }
@@ -237,62 +241,69 @@ function hasSufficientCredits($userId) {
 }
 
 function addHistory($userId, $action, $query, $resultCount) {
-    $db = loadDatabase();
-    $db['history'][] = [
+    supabaseRequest('POST', '/rest/v1/history', [
         'user_id' => (string)$userId,
         'action' => $action,
         'query' => $query,
         'result_count' => $resultCount,
         'timestamp' => date('Y-m-d H:i:s')
-    ];
-    if (count($db['history']) > 1000) $db['history'] = array_slice($db['history'], -1000);
-    saveDatabase($db);
+    ]);
 }
 
 function setUserState($userId, $action, $data = "") {
-    $db = loadDatabase();
-    $db['user_states'][(string)$userId] = ['action' => $action, 'data' => $data];
-    saveDatabase($db);
+    $existing = supabaseRequest('GET', '/rest/v1/user_states', null, ['user_id' => 'eq.' . (string)$userId, 'limit' => 1]);
+    if (is_array($existing) && count($existing) > 0) {
+        supabaseRequest('PATCH', '/rest/v1/user_states', ['action' => $action, 'data' => $data], ['user_id' => 'eq.' . (string)$userId]);
+    } else {
+        supabaseRequest('POST', '/rest/v1/user_states', ['user_id' => (string)$userId, 'action' => $action, 'data' => $data]);
+    }
 }
 
 function getUserState($userId) {
-    $db = loadDatabase();
-    return isset($db['user_states'][(string)$userId]) ? $db['user_states'][(string)$userId] : null;
+    $response = supabaseRequest('GET', '/rest/v1/user_states', null, ['user_id' => 'eq.' . (string)$userId, 'limit' => 1]);
+    if (is_array($response) && count($response) > 0) {
+        return ['action' => $response[0]['action'], 'data' => $response[0]['data']];
+    }
+    return null;
 }
 
 function clearUserState($userId) {
-    $db = loadDatabase();
-    unset($db['user_states'][(string)$userId]);
-    saveDatabase($db);
+    supabaseRequest('DELETE', '/rest/v1/user_states', null, ['user_id' => 'eq.' . (string)$userId]);
 }
 
 function updateStats($planKey = null, $amount = 0) {
-    $db = loadDatabase();
+    $statsResponse = supabaseRequest('GET', '/rest/v1/payment_stats', null, ['select' => '*', 'limit' => 1]);
+    $stats = is_array($statsResponse) && count($statsResponse) > 0 ? $statsResponse[0] : ['today_income' => 0, 'total_income' => 0, 'plan_counts' => [], 'today_date' => date('Y-m-d')];
+    if (is_string($stats['plan_counts'])) {
+        $stats['plan_counts'] = json_decode($stats['plan_counts'], true) ?: [];
+    }
     $today = date('Y-m-d');
-    if (!isset($db['payment_stats']) || $db['payment_stats']['today_date'] !== $today) {
-        $db['payment_stats'] = [
-            'today_income' => 0,
-            'total_income' => $db['payment_stats']['total_income'] ?? 0,
-            'plan_counts' => [],
-            'today_date' => $today
-        ];
+    if ($stats['today_date'] !== $today) {
+        $stats['today_income'] = 0;
+        $stats['plan_counts'] = [];
+        $stats['today_date'] = $today;
     }
     if ($planKey && $amount) {
-        $db['payment_stats']['today_income'] += $amount;
-        $db['payment_stats']['total_income'] = ($db['payment_stats']['total_income'] ?? 0) + $amount;
-        $db['payment_stats']['plan_counts'][$planKey] = ($db['payment_stats']['plan_counts'][$planKey] ?? 0) + 1;
+        $stats['today_income'] += $amount;
+        $stats['total_income'] = ($stats['total_income'] ?? 0) + $amount;
+        $stats['plan_counts'][$planKey] = ($stats['plan_counts'][$planKey] ?? 0) + 1;
     }
-    saveDatabase($db);
+    $statsToSave = $stats;
+    $statsToSave['plan_counts'] = json_encode($stats['plan_counts']);
+    if (isset($stats['id'])) {
+        supabaseRequest('PATCH', '/rest/v1/payment_stats', $statsToSave, ['id' => 'eq.' . $stats['id']]);
+    } else {
+        supabaseRequest('POST', '/rest/v1/payment_stats', $statsToSave);
+    }
 }
 
 function getStats() {
-    $db = loadDatabase();
-    return $db['payment_stats'] ?? [
-        'today_income' => 0,
-        'total_income' => 0,
-        'plan_counts' => [],
-        'today_date' => date('Y-m-d')
-    ];
+    $statsResponse = supabaseRequest('GET', '/rest/v1/payment_stats', null, ['select' => '*', 'limit' => 1]);
+    $stats = is_array($statsResponse) && count($statsResponse) > 0 ? $statsResponse[0] : ['today_income' => 0, 'total_income' => 0, 'plan_counts' => [], 'today_date' => date('Y-m-d')];
+    if (is_string($stats['plan_counts'])) {
+        $stats['plan_counts'] = json_decode($stats['plan_counts'], true) ?: [];
+    }
+    return $stats;
 }
 
 function val($v) {
@@ -1038,11 +1049,13 @@ function handleStart($chatId, $userId, $name, $username, $text = '') {
         $parts = explode(' ', $text, 2);
         if (isset($parts[1])) {
             $refCode = trim($parts[1]);
-            $db = loadDatabase();
-            foreach ($db['users'] as $user) {
-                if (($user['referral_code'] ?? '') === $refCode && $user['user_id'] !== (string)$userId) {
-                    $referredBy = $user['user_id'];
-                    break;
+            $users = supabaseRequest('GET', '/rest/v1/users', null, ['select' => '*']);
+            if (is_array($users)) {
+                foreach ($users as $user) {
+                    if (($user['referral_code'] ?? '') === $refCode && $user['user_id'] !== (string)$userId) {
+                        $referredBy = $user['user_id'];
+                        break;
+                    }
                 }
             }
         }
@@ -1050,7 +1063,6 @@ function handleStart($chatId, $userId, $name, $username, $text = '') {
     if (!getUser($userId)) createUser($userId, $name, $username, $referredBy);
     $user = getUser($userId);
     
-    // Fix: Ensure credits display properly
     $creditsDisplay = '0';
     if ($user) {
         if ($user['credits'] === 'UNLIMITED') {
@@ -1079,7 +1091,6 @@ function handleProfile($chatId, $userId) {
     }
     $role = isAdmin($userId) ? '👑 Admin' : '👤 User';
     
-    // Fix: Properly format credits for display
     $balance = '0 Credits';
     if ($user['credits'] === 'UNLIMITED') {
         $balance = 'Unlimited';
@@ -1231,12 +1242,12 @@ function handleCallback($callbackQuery) {
         }
         $plan = $CREDIT_PLANS[$planKey];
         
-        $db = loadDatabase();
-        $alreadyCredited = false;
-        if (isset($db['pending_payments'][$orderId])) {
-            $alreadyCredited = true;
-        } else {
-            $db['pending_payments'][$orderId] = [
+        $existingPayment = supabaseRequest('GET', '/rest/v1/pending_payments', null, ['order_id' => 'eq.' . $orderId, 'limit' => 1]);
+        $alreadyCredited = is_array($existingPayment) && count($existingPayment) > 0;
+        
+        if (!$alreadyCredited) {
+            supabaseRequest('POST', '/rest/v1/pending_payments', [
+                'order_id' => $orderId,
                 'user_id' => $planUserId,
                 'plan_key' => $planKey,
                 'amount' => $amount,
@@ -1244,8 +1255,7 @@ function handleCallback($callbackQuery) {
                 'txn_id' => $txnId,
                 'time' => $paymentTime,
                 'status' => 'completed'
-            ];
-            saveDatabase($db);
+            ]);
             
             if ($planKey === 'unlimited') {
                 setUnlimitedCredits($planUserId);
@@ -1271,13 +1281,15 @@ function handleCallback($callbackQuery) {
         switch ($data) {
             case 'admin_stats':
                 $stats = getStats();
-                $db = loadDatabase();
-                $totalUsers = count($db['users']);
+                $users = supabaseRequest('GET', '/rest/v1/users', null, ['select' => '*']);
+                $totalUsers = is_array($users) ? count($users) : 0;
                 $bannedUsers = 0;
                 $unlimitedUsers = 0;
-                foreach ($db['users'] as $u) {
-                    if ($u['banned']) $bannedUsers++;
-                    if ($u['credits'] === 'UNLIMITED') $unlimitedUsers++;
+                if (is_array($users)) {
+                    foreach ($users as $u) {
+                        if ($u['banned']) $bannedUsers++;
+                        if ($u['credits'] === 'UNLIMITED') $unlimitedUsers++;
+                    }
                 }
                 $statsText = "📊 <b>Bot Statistics</b>\n━━━━━━━━━━━━━━━━━━\n💰 <b>Today's Income:</b> ₹{$stats['today_income']}\n💰 <b>Total Income:</b> ₹{$stats['total_income']}\n━━━━━━━━━━━━━━━━━━\n📈 <b>Plan Purchases Today:</b>";
                 if (isset($stats['plan_counts']) && count($stats['plan_counts']) > 0) {
@@ -1293,12 +1305,11 @@ function handleCallback($callbackQuery) {
                 answerCallbackQuery($callbackId);
                 break;
             case 'admin_view_pending':
-                $db = loadDatabase();
-                $pending = $db['pending_payments'] ?? [];
+                $pending = supabaseRequest('GET', '/rest/v1/pending_payments', null, ['select' => '*']);
                 $msg = "📋 <b>PENDING PAYMENTS</b>\n━━━━━━━━━━━━━━━━━━\n";
-                if (count($pending) > 0) {
-                    foreach ($pending as $oid => $p) {
-                        $msg .= "🆔 <b>Order:</b> <code>$oid</code>\n👤 <b>User:</b> <code>{$p['user_id']}</code>\n📦 <b>Plan:</b> {$p['plan_key']}\n💰 <b>Amount:</b> ₹{$p['amount']}\n🔢 <b>UTR:</b> <code>{$p['utr']}</code>\n🕒 <b>Time:</b> {$p['time']}\n━━━━━━━━━━━━━━━━━━\n";
+                if (is_array($pending) && count($pending) > 0) {
+                    foreach ($pending as $p) {
+                        $msg .= "🆔 <b>Order:</b> <code>{$p['order_id']}</code>\n👤 <b>User:</b> <code>{$p['user_id']}</code>\n📦 <b>Plan:</b> {$p['plan_key']}\n💰 <b>Amount:</b> ₹{$p['amount']}\n🔢 <b>UTR:</b> <code>{$p['utr']}</code>\n🕒 <b>Time:</b> {$p['time']}\n━━━━━━━━━━━━━━━━━━\n";
                     }
                 } else {
                     $msg .= "• No pending payments";
@@ -1307,16 +1318,17 @@ function handleCallback($callbackQuery) {
                 answerCallbackQuery($callbackId);
                 break;
             case 'admin_all_users':
-                $db = loadDatabase();
-                $users = $db['users'];
+                $users = supabaseRequest('GET', '/rest/v1/users', null, ['select' => '*']);
                 $msg = "👥 <b>ALL USERS</b>\n━━━━━━━━━━━━━━━━━━\n";
                 $count = 0;
-                foreach ($users as $u) {
-                    $count++;
-                    $msg .= "👤 <b>User #$count</b>\n🆔 <b>ID:</b> <code>{$u['user_id']}</code>\n📛 <b>Name:</b> {$u['name']}\n💰 <b>Credits:</b> {$u['credits']}\n🚫 <b>Banned:</b> " . ($u['banned'] ? 'YES' : 'NO') . "\n━━━━━━━━━━━━━━━━━━\n";
-                    if ($count >= 50) {
-                        $msg .= "\n⚠️ <i>Showing first 50 users</i>";
-                        break;
+                if (is_array($users)) {
+                    foreach ($users as $u) {
+                        $count++;
+                        $msg .= "👤 <b>User #$count</b>\n🆔 <b>ID:</b> <code>{$u['user_id']}</code>\n📛 <b>Name:</b> {$u['name']}\n💰 <b>Credits:</b> {$u['credits']}\n🚫 <b>Banned:</b> " . ($u['banned'] ? 'YES' : 'NO') . "\n━━━━━━━━━━━━━━━━━━\n";
+                        if ($count >= 50) {
+                            $msg .= "\n⚠️ <i>Showing first 50 users</i>";
+                            break;
+                        }
                     }
                 }
                 if ($count == 0) $msg .= "• No users found";
@@ -1539,19 +1551,14 @@ function handleStateMessage($chatId, $userId, $state, $text) {
     }
     switch ($action) {
         case 'viewhistory':
-            $db = loadDatabase();
             $targetId = trim($text);
-            $history = [];
-            foreach ($db['history'] as $h) {
-                if ($h['user_id'] === $targetId) $history[] = $h;
-            }
-            if (count($history) > 0) {
+            $history = supabaseRequest('GET', '/rest/v1/history', null, ['user_id' => 'eq.' . $targetId, 'order' => 'timestamp.desc', 'limit' => 20]);
+            if (is_array($history) && count($history) > 0) {
                 $msg = "📜 <b>HISTORY FOR USER $targetId</b>\n━━━━━━━━━━━━━━━━━━\n";
                 $count = 0;
-                foreach (array_reverse($history) as $h) {
+                foreach ($history as $h) {
                     $count++;
                     $msg .= "🕒 <b>#{$count}</b>\n🔍 <b>Action:</b> {$h['action']}\n📝 <b>Query:</b> {$h['query']}\n📊 <b>Results:</b> {$h['result_count']}\n📅 <b>Time:</b> {$h['timestamp']}\n━━━━━━━━━━━━━━━━━━\n";
-                    if ($count >= 20) break;
                 }
             } else {
                 $msg = "❌ No history found for user $targetId";
@@ -1584,25 +1591,19 @@ function handleStateMessage($chatId, $userId, $state, $text) {
         case 'bulkcredit':
             $amount = (int)trim($text);
             if ($amount > 0) {
-                $db = loadDatabase();
+                $users = supabaseRequest('GET', '/rest/v1/users', null, ['select' => '*']);
                 $count = 0;
-                $notifiedUsers = [];
-                foreach ($db['users'] as $key => $u) {
-                    if ($u['credits'] !== 'UNLIMITED') {
-                        $current = is_numeric($u['credits']) ? (int)$u['credits'] : 0;
-                        $db['users'][$key]['credits'] = (string)($current + $amount);
-                        $count++;
-                        $notifiedUsers[] = $key;
+                if (is_array($users)) {
+                    foreach ($users as $u) {
+                        if ($u['credits'] !== 'UNLIMITED') {
+                            $current = is_numeric($u['credits']) ? (int)$u['credits'] : 0;
+                            supabaseRequest('PATCH', '/rest/v1/users', ['credits' => (string)($current + $amount)], ['user_id' => 'eq.' . $u['user_id']]);
+                            $count++;
+                            sendMessage($u['user_id'], "🎁 <b>BONUS CREDITS ADDED!</b>\n\n💰 <b>Added:</b> $amount credits\n💎 <b>New Balance:</b> <code>" . ($current + $amount) . "</code>\n\nUse /profile to check your status.");
+                        }
                     }
                 }
-                saveDatabase($db);
                 sendMessage($chatId, "✅ Added $amount credits to $count users.");
-                foreach ($notifiedUsers as $notifiedUserId) {
-                    $notifiedUser = $db['users'][$notifiedUserId];
-                    if ($notifiedUser) {
-                        sendMessage($notifiedUserId, "🎁 <b>BONUS CREDITS ADDED!</b>\n\n💰 <b>Added:</b> $amount credits\n💎 <b>New Balance:</b> <code>{$notifiedUser['credits']}</code>\n\nUse /profile to check your status.");
-                    }
-                }
             } else {
                 sendMessage($chatId, "❌ Invalid amount.");
             }
@@ -1617,9 +1618,7 @@ function handleStateMessage($chatId, $userId, $state, $text) {
                 if ($user) {
                     if ($user['credits'] !== 'UNLIMITED') {
                         $new = max(0, (int)$user['credits'] - $amount);
-                        $db = loadDatabase();
-                        $db['users'][(string)$targetId]['credits'] = (string)$new;
-                        saveDatabase($db);
+                        supabaseRequest('PATCH', '/rest/v1/users', ['credits' => (string)$new], ['user_id' => 'eq.' . $targetId]);
                         sendMessage($chatId, "✅ Removed $amount credits. New balance: $new");
                         sendMessage($targetId, "⚠️ <b>CREDITS REMOVED!</b>\n\n💰 <b>Removed:</b> $amount credits\n💎 <b>New Balance:</b> <code>$new</code>\n\nUse /profile to check your status.");
                     } else {
@@ -1648,35 +1647,25 @@ function handleStateMessage($chatId, $userId, $state, $text) {
             clearUserState($userId);
             break;
         case 'ban':
-            $db = loadDatabase();
-            if (isset($db['users'][(string)trim($text)])) {
-                $db['users'][(string)trim($text)]['banned'] = 1;
-                saveDatabase($db);
-                sendMessage($chatId, "✅ User " . trim($text) . " banned.");
-            } else {
-                sendMessage($chatId, "User not found.");
-            }
+            supabaseRequest('PATCH', '/rest/v1/users', ['banned' => 1], ['user_id' => 'eq.' . trim($text)]);
+            sendMessage($chatId, "✅ User " . trim($text) . " banned.");
             clearUserState($userId);
             break;
         case 'unban':
-            $db = loadDatabase();
-            if (isset($db['users'][(string)trim($text)])) {
-                $db['users'][(string)trim($text)]['banned'] = 0;
-                saveDatabase($db);
-                sendMessage($chatId, "✅ User " . trim($text) . " unbanned.");
-            } else {
-                sendMessage($chatId, "User not found.");
-            }
+            supabaseRequest('PATCH', '/rest/v1/users', ['banned' => 0], ['user_id' => 'eq.' . trim($text)]);
+            sendMessage($chatId, "✅ User " . trim($text) . " unbanned.");
             clearUserState($userId);
             break;
         case 'broadcast':
-            $db = loadDatabase();
+            $users = supabaseRequest('GET', '/rest/v1/users', null, ['select' => '*']);
             $success = 0;
-            foreach ($db['users'] as $u) {
-                sendMessage($u['user_id'], $text);
-                $success++;
+            if (is_array($users)) {
+                foreach ($users as $u) {
+                    sendMessage($u['user_id'], $text);
+                    $success++;
+                }
             }
-            sendMessage($chatId, "✅ Broadcast sent to $success/" . count($db['users']) . " users.");
+            sendMessage($chatId, "✅ Broadcast sent to $success/" . (is_array($users) ? count($users) : 0) . " users.");
             clearUserState($userId);
             break;
     }
