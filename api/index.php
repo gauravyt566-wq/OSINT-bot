@@ -11,7 +11,7 @@ $API_KEY = "GAURAV5208";
 $FAM_API_KEY = "FAM_49369415eefe95c67d87f1dd0879712c1baf5916f0fca390";
 $FREE_CREDITS = 2;
 $REFER_BONUS = 2;
-$COOLDOWN = 3;
+$COOLDOWN = 0;
 $UPI_ID = "gaurav.intel@fam";
 
 $SUPABASE_URL = "https://catmgsuucfvtiubtbpto.supabase.co";
@@ -68,6 +68,8 @@ function supabaseRequest($method, $path, $data = null, $params = []) {
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
     if ($method === 'POST') {
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
@@ -82,75 +84,8 @@ function supabaseRequest($method, $path, $data = null, $params = []) {
     return json_decode($response, true);
 }
 
-function loadDatabase() {
-    $response = supabaseRequest('GET', '/rest/v1/users', null, ['select' => '*']);
-    $users = [];
-    if (is_array($response)) {
-        foreach ($response as $user) {
-            $users[$user['user_id']] = $user;
-        }
-    }
-    $historyResponse = supabaseRequest('GET', '/rest/v1/history', null, ['select' => '*', 'order' => 'timestamp.desc', 'limit' => 1000]);
-    $history = is_array($historyResponse) ? $historyResponse : [];
-    $statesResponse = supabaseRequest('GET', '/rest/v1/user_states', null, ['select' => '*']);
-    $userStates = [];
-    if (is_array($statesResponse)) {
-        foreach ($statesResponse as $state) {
-            $userStates[$state['user_id']] = ['action' => $state['action'], 'data' => $state['data']];
-        }
-    }
-    $paymentsResponse = supabaseRequest('GET', '/rest/v1/pending_payments', null, ['select' => '*']);
-    $pendingPayments = [];
-    if (is_array($paymentsResponse)) {
-        foreach ($paymentsResponse as $payment) {
-            $pendingPayments[$payment['order_id']] = $payment;
-        }
-    }
-    $statsResponse = supabaseRequest('GET', '/rest/v1/payment_stats', null, ['select' => '*', 'limit' => 1]);
-    $paymentStats = is_array($statsResponse) && count($statsResponse) > 0 ? $statsResponse[0] : ['today_income' => 0, 'total_income' => 0, 'plan_counts' => [], 'today_date' => date('Y-m-d')];
-    if (is_string($paymentStats['plan_counts'])) {
-        $paymentStats['plan_counts'] = json_decode($paymentStats['plan_counts'], true) ?: [];
-    }
-    return ['users' => $users, 'history' => $history, 'user_states' => $userStates, 'payment_stats' => $paymentStats, 'pending_payments' => $pendingPayments];
-}
-
-function saveDatabase($data) {
-    $users = supabaseRequest('GET', '/rest/v1/users', null, ['select' => 'user_id']);
-    $existingUserIds = [];
-    if (is_array($users)) {
-        foreach ($users as $user) {
-            $existingUserIds[] = $user['user_id'];
-        }
-    }
-    foreach ($data['users'] as $user) {
-        if (in_array($user['user_id'], $existingUserIds)) {
-            supabaseRequest('PATCH', '/rest/v1/users', $user, ['user_id' => 'eq.' . $user['user_id']]);
-        } else {
-            supabaseRequest('POST', '/rest/v1/users', $user);
-        }
-    }
-    supabaseRequest('DELETE', '/rest/v1/history', null, ['user_id' => 'neq.000000000']);
-    foreach ($data['history'] as $historyItem) {
-        supabaseRequest('POST', '/rest/v1/history', $historyItem);
-    }
-    supabaseRequest('DELETE', '/rest/v1/user_states', null, ['user_id' => 'neq.000000000']);
-    foreach ($data['user_states'] as $userId => $state) {
-        supabaseRequest('POST', '/rest/v1/user_states', ['user_id' => $userId, 'action' => $state['action'], 'data' => $state['data']]);
-    }
-    supabaseRequest('DELETE', '/rest/v1/pending_payments', null, ['order_id' => 'neq.000000000']);
-    foreach ($data['pending_payments'] as $payment) {
-        supabaseRequest('POST', '/rest/v1/pending_payments', $payment);
-    }
-    $stats = $data['payment_stats'];
-    if (is_array($stats['plan_counts'])) {
-        $stats['plan_counts'] = json_encode($stats['plan_counts']);
-    }
-    supabaseRequest('DELETE', '/rest/v1/payment_stats', null, ['id' => 'gt.0']);
-    supabaseRequest('POST', '/rest/v1/payment_stats', $stats);
-}
-
 function getUser($userId) {
-    $response = supabaseRequest('GET', '/rest/v1/users', null, ['user_id' => 'eq.' . $userId, 'limit' => 1]);
+    $response = supabaseRequest('GET', '/rest/v1/users', null, ['user_id' => 'eq.' . $userId, 'limit' => '1']);
     return is_array($response) && count($response) > 0 ? $response[0] : null;
 }
 
@@ -173,7 +108,6 @@ function createUser($userId, $name, $username, $referredBy = null) {
         if ($referredBy) {
             $referrer = getUser($referredBy);
             if ($referrer && $referrer['credits'] !== 'UNLIMITED') {
-                $current = is_numeric($referrer['credits']) ? (int)$referrer['credits'] : 0;
                 updateUserCredits($referredBy, $GLOBALS['REFER_BONUS']);
             }
         }
@@ -222,7 +156,7 @@ function updateLastRequest($userId) {
 
 function checkCooldown($userId) {
     $user = getUser($userId);
-    if ($user && isset($user['last_request'])) {
+    if ($user && isset($user['last_request']) && $user['last_request'] > 0) {
         $diff = time() - $user['last_request'];
         if ($diff < $GLOBALS['COOLDOWN']) return $GLOBALS['COOLDOWN'] - $diff;
     }
@@ -251,7 +185,7 @@ function addHistory($userId, $action, $query, $resultCount) {
 }
 
 function setUserState($userId, $action, $data = "") {
-    $existing = supabaseRequest('GET', '/rest/v1/user_states', null, ['user_id' => 'eq.' . (string)$userId, 'limit' => 1]);
+    $existing = supabaseRequest('GET', '/rest/v1/user_states', null, ['user_id' => 'eq.' . (string)$userId, 'limit' => '1']);
     if (is_array($existing) && count($existing) > 0) {
         supabaseRequest('PATCH', '/rest/v1/user_states', ['action' => $action, 'data' => $data], ['user_id' => 'eq.' . (string)$userId]);
     } else {
@@ -260,7 +194,7 @@ function setUserState($userId, $action, $data = "") {
 }
 
 function getUserState($userId) {
-    $response = supabaseRequest('GET', '/rest/v1/user_states', null, ['user_id' => 'eq.' . (string)$userId, 'limit' => 1]);
+    $response = supabaseRequest('GET', '/rest/v1/user_states', null, ['user_id' => 'eq.' . (string)$userId, 'limit' => '1']);
     if (is_array($response) && count($response) > 0) {
         return ['action' => $response[0]['action'], 'data' => $response[0]['data']];
     }
@@ -272,24 +206,26 @@ function clearUserState($userId) {
 }
 
 function updateStats($planKey = null, $amount = 0) {
-    $statsResponse = supabaseRequest('GET', '/rest/v1/payment_stats', null, ['select' => '*', 'limit' => 1]);
-    $stats = is_array($statsResponse) && count($statsResponse) > 0 ? $statsResponse[0] : ['today_income' => 0, 'total_income' => 0, 'plan_counts' => [], 'today_date' => date('Y-m-d')];
-    if (is_string($stats['plan_counts'])) {
-        $stats['plan_counts'] = json_decode($stats['plan_counts'], true) ?: [];
-    }
+    $statsResponse = supabaseRequest('GET', '/rest/v1/payment_stats', null, ['select' => '*', 'limit' => '1']);
+    $stats = is_array($statsResponse) && count($statsResponse) > 0 ? $statsResponse[0] : ['today_income' => 0, 'total_income' => 0, 'plan_counts' => '{}', 'today_date' => date('Y-m-d')];
+    $planCounts = json_decode($stats['plan_counts'] ?? '{}', true) ?: [];
     $today = date('Y-m-d');
     if ($stats['today_date'] !== $today) {
         $stats['today_income'] = 0;
-        $stats['plan_counts'] = [];
+        $planCounts = [];
         $stats['today_date'] = $today;
     }
     if ($planKey && $amount) {
-        $stats['today_income'] += $amount;
+        $stats['today_income'] = ($stats['today_income'] ?? 0) + $amount;
         $stats['total_income'] = ($stats['total_income'] ?? 0) + $amount;
-        $stats['plan_counts'][$planKey] = ($stats['plan_counts'][$planKey] ?? 0) + 1;
+        $planCounts[$planKey] = ($planCounts[$planKey] ?? 0) + 1;
     }
-    $statsToSave = $stats;
-    $statsToSave['plan_counts'] = json_encode($stats['plan_counts']);
+    $statsToSave = [
+        'today_income' => $stats['today_income'],
+        'total_income' => $stats['total_income'],
+        'plan_counts' => json_encode($planCounts),
+        'today_date' => $stats['today_date']
+    ];
     if (isset($stats['id'])) {
         supabaseRequest('PATCH', '/rest/v1/payment_stats', $statsToSave, ['id' => 'eq.' . $stats['id']]);
     } else {
@@ -298,11 +234,9 @@ function updateStats($planKey = null, $amount = 0) {
 }
 
 function getStats() {
-    $statsResponse = supabaseRequest('GET', '/rest/v1/payment_stats', null, ['select' => '*', 'limit' => 1]);
-    $stats = is_array($statsResponse) && count($statsResponse) > 0 ? $statsResponse[0] : ['today_income' => 0, 'total_income' => 0, 'plan_counts' => [], 'today_date' => date('Y-m-d')];
-    if (is_string($stats['plan_counts'])) {
-        $stats['plan_counts'] = json_decode($stats['plan_counts'], true) ?: [];
-    }
+    $statsResponse = supabaseRequest('GET', '/rest/v1/payment_stats', null, ['select' => '*', 'limit' => '1']);
+    $stats = is_array($statsResponse) && count($statsResponse) > 0 ? $statsResponse[0] : ['today_income' => 0, 'total_income' => 0, 'plan_counts' => '{}', 'today_date' => date('Y-m-d')];
+    $stats['plan_counts'] = json_decode($stats['plan_counts'] ?? '{}', true) ?: [];
     return $stats;
 }
 
@@ -761,7 +695,8 @@ function fetchApi($url) {
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -801,6 +736,7 @@ function sendMessage($chatId, $text, $replyMarkup = null) {
     curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
     $response = curl_exec($ch);
     curl_close($ch);
@@ -817,6 +753,7 @@ function editMessageText($chatId, $messageId, $text, $replyMarkup = null) {
     curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
     $response = curl_exec($ch);
     curl_close($ch);
@@ -837,6 +774,7 @@ function editMessageMedia($chatId, $messageId, $mediaUrl, $caption = '', $replyM
     curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
     $response = curl_exec($ch);
     curl_close($ch);
@@ -852,6 +790,7 @@ function deleteMessage($chatId, $messageId) {
     curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
     $response = curl_exec($ch);
     curl_close($ch);
@@ -868,6 +807,7 @@ function sendPhoto($chatId, $photoUrl, $caption = '', $replyMarkup = null) {
     curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
     $response = curl_exec($ch);
     curl_close($ch);
@@ -882,7 +822,8 @@ function answerCallbackQuery($callbackQueryId, $text = '', $showAlert = false) {
     curl_setopt($ch, CURLOPT_POST, true);
     curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 3);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
     $response = curl_exec($ch);
     curl_close($ch);
@@ -923,7 +864,7 @@ function sendLongMessage($chatId, $text, $replyMarkup = null) {
         } else {
             $lastMsg = sendMessage($chatId, $chunk);
         }
-        usleep(200000);
+        usleep(100000);
     }
     return $lastMsg;
 }
@@ -933,12 +874,6 @@ function processLookupRequest($chatId, $userId, $lookupType, $term, $noResultMes
     
     if (!checkForceJoin($userId)) {
         sendMessage($chatId, "❌ <b>Please join our channel first!</b>", getForceJoinKeyboard());
-        return;
-    }
-    
-    $cooldown = checkCooldown($userId);
-    if ($cooldown > 0) {
-        sendMessage($chatId, "⏳ Please wait $cooldown seconds before next request!");
         return;
     }
     
@@ -960,12 +895,18 @@ function processLookupRequest($chatId, $userId, $lookupType, $term, $noResultMes
     $apiUrl = str_replace(['{key}', '{term}'], [$API_KEY, urlencode($term)], $apiEndpoint);
     
     $statusMsg = sendMessage($chatId, "⏳ Processing your request...");
+    $statusMessageId = $statusMsg['result']['message_id'] ?? null;
+    
     $rawData = fetchApi($apiUrl);
     
     if (!is_valid_response($rawData) || !has_actual_data($rawData)) {
         $user = getUser($userId);
         $credits = $user ? $user['credits'] : '0';
-        editMessageText($chatId, $statusMsg['result']['message_id'], "❌ <b>$noResultMessage</b>\n\n💡 <b>No credits were deducted</b>\n\n💰 <b>CREDITS REMAINING:</b> <code>$credits</code>");
+        if ($statusMessageId) {
+            editMessageText($chatId, $statusMessageId, "❌ <b>$noResultMessage</b>\n\n💡 <b>No credits were deducted</b>\n\n💰 <b>CREDITS REMAINING:</b> <code>$credits</code>");
+        } else {
+            sendMessage($chatId, "❌ <b>$noResultMessage</b>\n\n💡 <b>No credits were deducted</b>\n\n💰 <b>CREDITS REMAINING:</b> <code>$credits</code>");
+        }
         return;
     }
     
@@ -996,7 +937,11 @@ function processLookupRequest($chatId, $userId, $lookupType, $term, $noResultMes
         if (!$validator($extractedData)) {
             $user = getUser($userId);
             $credits = $user ? $user['credits'] : '0';
-            editMessageText($chatId, $statusMsg['result']['message_id'], "❌ <b>$noResultMessage</b>\n\n💡 <b>No credits were deducted</b>\n\n💰 <b>CREDITS REMAINING:</b> <code>$credits</code>");
+            if ($statusMessageId) {
+                editMessageText($chatId, $statusMessageId, "❌ <b>$noResultMessage</b>\n\n💡 <b>No credits were deducted</b>\n\n💰 <b>CREDITS REMAINING:</b> <code>$credits</code>");
+            } else {
+                sendMessage($chatId, "❌ <b>$noResultMessage</b>\n\n💡 <b>No credits were deducted</b>\n\n💰 <b>CREDITS REMAINING:</b> <code>$credits</code>");
+            }
             return;
         }
     }
@@ -1005,7 +950,11 @@ function processLookupRequest($chatId, $userId, $lookupType, $term, $noResultMes
         if (!deductCredit($userId)) {
             $user = getUser($userId);
             $credits = $user ? $user['credits'] : '0';
-            editMessageText($chatId, $statusMsg['result']['message_id'], "❌ <b>INSUFFICIENT CREDITS</b>\n\n💰 <b>CREDITS REMAINING:</b> <code>$credits</code>");
+            if ($statusMessageId) {
+                editMessageText($chatId, $statusMessageId, "❌ <b>INSUFFICIENT CREDITS</b>\n\n💰 <b>CREDITS REMAINING:</b> <code>$credits</code>");
+            } else {
+                sendMessage($chatId, "❌ <b>INSUFFICIENT CREDITS</b>\n\n💰 <b>CREDITS REMAINING:</b> <code>$credits</code>");
+            }
             return;
         }
     }
@@ -1039,7 +988,9 @@ function processLookupRequest($chatId, $userId, $lookupType, $term, $noResultMes
     $resultCount = is_array($extractedData) ? count($extractedData) : 1;
     addHistory($userId, $lookupType, $term, $resultCount);
     
-    deleteMessage($chatId, $statusMsg['result']['message_id']);
+    if ($statusMessageId) {
+        deleteMessage($chatId, $statusMessageId);
+    }
     sendLongMessage($chatId, $result);
 }
 
@@ -1242,7 +1193,7 @@ function handleCallback($callbackQuery) {
         }
         $plan = $CREDIT_PLANS[$planKey];
         
-        $existingPayment = supabaseRequest('GET', '/rest/v1/pending_payments', null, ['order_id' => 'eq.' . $orderId, 'limit' => 1]);
+        $existingPayment = supabaseRequest('GET', '/rest/v1/pending_payments', null, ['order_id' => 'eq.' . $orderId, 'limit' => '1']);
         $alreadyCredited = is_array($existingPayment) && count($existingPayment) > 0;
         
         if (!$alreadyCredited) {
@@ -1552,7 +1503,7 @@ function handleStateMessage($chatId, $userId, $state, $text) {
     switch ($action) {
         case 'viewhistory':
             $targetId = trim($text);
-            $history = supabaseRequest('GET', '/rest/v1/history', null, ['user_id' => 'eq.' . $targetId, 'order' => 'timestamp.desc', 'limit' => 20]);
+            $history = supabaseRequest('GET', '/rest/v1/history', null, ['user_id' => 'eq.' . $targetId, 'order' => 'timestamp.desc', 'limit' => '20']);
             if (is_array($history) && count($history) > 0) {
                 $msg = "📜 <b>HISTORY FOR USER $targetId</b>\n━━━━━━━━━━━━━━━━━━\n";
                 $count = 0;
