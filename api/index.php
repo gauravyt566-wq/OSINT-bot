@@ -6,11 +6,13 @@ $BOT_TOKEN = "8688224146:AAFDT2xBblVpRS-nXYzvDOv6D6DglorA6gE";
 $BOT_USERNAME = "@CyberWalaBandaBot";
 $ADMIN_IDS = ["7255220723"];
 
-$FORCE_CHANNEL = "@CyberWalaBandaGC";
-$FORCE_CHANNEL_LINK = "https://t.me/CyberWalaBandaGC";
-$FORCE_GROUP = "@CyberWalaBandaGC";
-$FORCE_GROUP_LINK = "https://t.me/CyberWalaBandaGC";
-$SECRET_GROUP_LINK = "https://t.me/CyberWalaBandaGC";
+$FORCE_CHANNELS = [
+    "@PrivateLimitedHub",
+    "@CyberWalaBandaGC"
+];
+
+$PRIVATE_BOT_LINK = "https://t.me/CyberWalaBandaBot";
+$GROUP_ADD_LINK = "https://t.me/CyberWalaBandaBot?startgroup=true";
 
 $API_ENDPOINTS = [
     'mobile'    => "https://ansh-apis.is-dev.org/api/new?key=ansh&num={term}",
@@ -36,18 +38,38 @@ $API_ENDPOINTS = [
     'engine'    => "https://chassis-engine-lookup-rosy.vercel.app/engine?number={term}"
 ];
 
+$RESULT_TITLES = [
+    'mobile'    => "📲 Mobile Info Result",
+    'aadhaar'   => "🪪 Aadhaar Info Result",
+    'family'    => "👨‍👩‍👧‍👦 Family Info Result",
+    'ration'    => "🍚 Ration Card Result",
+    'lpg'       => "🛢️ LPG Info Result",
+    'ifsc'      => "🏦 IFSC Info Result",
+    'ip'        => "🌐 IP Lookup Result",
+    'telegram'  => "✈️ Telegram Info Result",
+    'paytm'     => "💳 Paytm Info Result",
+    'pincode'   => "📍 Pincode Info Result",
+    'freefire'  => "🎮 Free Fire Info Result",
+    'vehicle'   => "🏍 Vehicle RC Result",
+    'mob2veh'   => "📱→🚗 Mobile to Vehicle Result",
+    'challan'   => "🚔 Challan Info Result",
+    'instagram' => "📸 Instagram Info Result",
+    'vnum'      => "🚗 Vehicle to Number Result",
+    'pangst'    => "📇 PAN to GST Result",
+    'gst'       => "🏢 GST Info Result",
+    'pan'       => "💳 PAN Info Result",
+    'chassis'   => "🔩 Chassis Info Result",
+    'engine'    => "⚙️ Engine Info Result"
+];
+
 function isAdmin($userId) {
     return in_array((string)$userId, $GLOBALS['ADMIN_IDS']);
 }
 
 function checkForceJoin($userId) {
-    global $BOT_TOKEN, $FORCE_CHANNEL, $FORCE_GROUP;
-    $chats = [];
-    if ($FORCE_CHANNEL) $chats[] = $FORCE_CHANNEL;
-    if ($FORCE_GROUP && $FORCE_GROUP !== $FORCE_CHANNEL) $chats[] = $FORCE_GROUP;
-    if (empty($chats)) return true;
-
-    foreach ($chats as $chat) {
+    global $BOT_TOKEN, $FORCE_CHANNELS;
+    if (empty($FORCE_CHANNELS)) return true;
+    foreach ($FORCE_CHANNELS as $chat) {
         $url = "https://api.telegram.org/bot$BOT_TOKEN/getChatMember?chat_id=" . urlencode($chat) . "&user_id=" . $userId;
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $url);
@@ -68,25 +90,34 @@ function checkForceJoin($userId) {
 }
 
 function getForceJoinKeyboard() {
-    global $FORCE_CHANNEL_LINK, $FORCE_GROUP_LINK;
-    $rows = [];
-    if ($FORCE_CHANNEL_LINK) $rows[] = [['text' => '📢 JOIN CHANNEL', 'url' => $FORCE_CHANNEL_LINK]];
-    if ($FORCE_GROUP_LINK) $rows[] = [['text' => '💬 JOIN GROUP', 'url' => $FORCE_GROUP_LINK]];
-    $rows[] = [['text' => '✅ CHECK JOIN', 'callback_data' => 'check_join']];
-    return ['inline_keyboard' => $rows];
+    global $FORCE_CHANNELS;
+    $buttons = [];
+    $channelCount = 1;
+    foreach ($FORCE_CHANNELS as $channel) {
+        $clean = ltrim($channel, '@');
+        $buttons[] = [[
+            'text' => "📢 JOIN CHANNEL " . $channelCount,
+            'url' => "https://t.me/" . $clean
+        ]];
+        $channelCount++;
+    }
+    $buttons[] = [['text' => '✅ CHECK JOIN', 'callback_data' => 'check_join']];
+    return ['inline_keyboard' => $buttons];
 }
 
-function sendForceJoinMessage($chatId) {
-    $msg = "🔒 <b>PLEASE JOIN OUR CHANNEL & GROUP TO USE THIS BOT</b>\n━━━━━━━━━━━━━━━━━━\n\n";
+function sendForceJoinMessage($chatId, $replyTo = null) {
+    global $FORCE_CHANNELS;
+    $channelList = "";
+    foreach ($FORCE_CHANNELS as $c) {
+        $channelList .= "• " . $c . "\n";
+    }
+    $msg = "🔒 <b>PLEASE JOIN OUR CHANNEL(S) TO USE THIS BOT</b>\n━━━━━━━━━━━━━━━━━━\n\n";
+    $msg .= $channelList . "\n";
     $msg .= "✅ No Referral System\n";
     $msg .= "✅ No Limits\n";
     $msg .= "✅ Fast & Reliable Updates\n\n";
-    $msg .= "Join now and stay connected. 🚬\n\n";
-    $msg .= "TG TO NUMBER ALSO AVAILABLE FREE\n";
-    $msg .= "VEHICLE TO NUM ALSO AVAILABLE FREE\n\n";
-    $msg .= "Unlimited use no any limit\n\n";
-    $msg .= "👇 Join Here: " . $GLOBALS['FORCE_CHANNEL_LINK'];
-    sendMessage($chatId, $msg, getForceJoinKeyboard());
+    $msg .= "👇 Join Now & Stay Connected!";
+    sendMessage($chatId, $msg, getForceJoinKeyboard(), $replyTo);
 }
 
 function fetchApi($url) {
@@ -101,16 +132,47 @@ function fetchApi($url) {
     $response = curl_exec($ch);
     curl_close($ch);
     if ($response === false) return null;
-    $decoded = json_decode($response, true);
-    return $decoded !== null ? $decoded : $response;
+    return $response;
 }
 
-function sendMessage($chatId, $text, $replyMarkup = null) {
+function safeParseContent($content) {
+    if (is_array($content)) return $content;
+    if (!is_string($content)) return null;
+    $decoded = json_decode($content, true);
+    if ($decoded !== null) return $decoded;
+    $start = strpos($content, "{");
+    $end = strrpos($content, "}");
+    if ($start !== false && $end !== false && $end > $start) {
+        $cleanStr = substr($content, $start, $end - $start + 1);
+        $decoded = json_decode($cleanStr, true);
+        if ($decoded !== null) return $decoded;
+    }
+    return null;
+}
+
+function sendMessage($chatId, $text, $replyMarkup = null, $replyTo = null) {
     global $BOT_TOKEN;
     $postData = ['chat_id' => $chatId, 'text' => $text, 'parse_mode' => 'HTML'];
     if ($replyMarkup) $postData['reply_markup'] = json_encode($replyMarkup);
+    if ($replyTo) $postData['reply_to_message_id'] = $replyTo;
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, "https://api.telegram.org/bot$BOT_TOKEN/sendMessage");
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    $response = curl_exec($ch);
+    curl_close($ch);
+    return json_decode($response, true);
+}
+
+function editMessageText($chatId, $messageId, $text) {
+    global $BOT_TOKEN;
+    $postData = ['chat_id' => $chatId, 'message_id' => $messageId, 'text' => $text, 'parse_mode' => 'HTML'];
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, "https://api.telegram.org/bot$BOT_TOKEN/editMessageText");
     curl_setopt($ch, CURLOPT_POST, true);
     curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -154,124 +216,140 @@ function answerCallbackQuery($callbackQueryId, $text = '', $showAlert = false) {
     return json_decode($response, true);
 }
 
-function splitResultParts($text, $maxLen = 3500) {
-    if (strlen($text) <= $maxLen) return [$text];
-    $parts = [];
-    $remaining = $text;
-    while (strlen($remaining) > $maxLen) {
-        $cut = strrpos(substr($remaining, 0, $maxLen), "\n");
-        if ($cut === false || $cut < ($maxLen / 2)) $cut = $maxLen;
-        $parts[] = substr($remaining, 0, $cut);
-        $remaining = substr($remaining, $cut);
+function scheduleDelete($chatId, $messageId) {
+    $time = time() + 60;
+    $file = sys_get_temp_dir() . '/bot_delete_queue.json';
+    $queue = [];
+    if (file_exists($file)) {
+        $queue = json_decode(file_get_contents($file), true) ?: [];
     }
-    if (trim($remaining) !== '') $parts[] = $remaining;
-    return $parts;
+    $queue[] = ['chat_id' => $chatId, 'message_id' => $messageId, 'time' => $time];
+    file_put_contents($file, json_encode($queue));
 }
 
-function sendResultParts($chatId, $text) {
-    $parts = splitResultParts($text, 3500);
-    $total = count($parts);
-    $lastMsg = null;
-    foreach ($parts as $i => $part) {
-        $num = $i + 1;
-        $header = "\n\n━━━━━━━━━━━━━━━━━━━━━━━\n📄 <b>PART $num / $total</b>\n━━━━━━━━━━━━━━━━━━━━━━━";
-        $lastMsg = sendMessage($chatId, $part . $header);
-        usleep(150000);
+function processPendingDeletes() {
+    $file = sys_get_temp_dir() . '/bot_delete_queue.json';
+    if (!file_exists($file)) return;
+    $queue = json_decode(file_get_contents($file), true) ?: [];
+    $now = time();
+    $remaining = [];
+    foreach ($queue as $item) {
+        if ($item['time'] <= $now) {
+            editMessageText($item['chat_id'], $item['message_id'], "🗑️ Message Deleted Successfully");
+            usleep(200000);
+            deleteMessage($item['chat_id'], $item['message_id']);
+        } else {
+            $remaining[] = $item;
+        }
     }
-    return $lastMsg;
+    file_put_contents($file, json_encode($remaining));
 }
 
-function processLookupRequest($chatId, $userId, $lookupType, $term, $isGroup = false) {
-    global $API_ENDPOINTS;
+function processLookupRequest($chatId, $userId, $lookupType, $term, $replyTo = null) {
+    global $API_ENDPOINTS, $RESULT_TITLES;
 
     if (!checkForceJoin($userId)) {
-        sendForceJoinMessage($chatId);
+        sendForceJoinMessage($chatId, $replyTo);
         return;
     }
 
     $apiEndpoint = $API_ENDPOINTS[$lookupType] ?? null;
     if (!$apiEndpoint) {
-        sendMessage($chatId, "❌ Invalid lookup type.");
+        sendMessage($chatId, "❌ Invalid lookup type.", null, $replyTo);
         return;
     }
 
     $apiUrl = str_replace('{term}', urlencode($term), $apiEndpoint);
 
-    $statusMsg = sendMessage($chatId, "⏳ Processing your request...");
+    $statusMsg = sendMessage($chatId, "⏳ Processing your request...", null, $replyTo);
     $statusMessageId = $statusMsg['result']['message_id'] ?? null;
 
-    $rawData = fetchApi($apiUrl);
+    $rawContent = fetchApi($apiUrl);
 
     if ($statusMessageId) {
         deleteMessage($chatId, $statusMessageId);
     }
 
-    if ($rawData === null) {
-        sendMessage($chatId, "❌ <b>API ERROR</b>\n\nAPI se koi response nahi mila.");
+    if ($rawContent === null) {
+        sendMessage($chatId, "❌ <b>API ERROR</b>\n\nAPI se koi response nahi mila.", null, $replyTo);
         return;
     }
 
-    if (is_array($rawData)) {
-        if (isset($rawData['data']) && is_array($rawData['data'])) {
-            $rawData['data']['_powered_by'] = "@CyberWalaBanda";
-        } else {
-            $rawData['_powered_by'] = "@CyberWalaBanda";
-        }
-        $jsonText = json_encode($rawData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    } else {
-        $jsonText = (string)$rawData . "\n\n_powered_by: @CyberWalaBanda";
+    $parsed = safeParseContent($rawContent);
+
+    if (!$parsed) {
+        $debugText = "⚠️ <b>Error: API response is not valid JSON.</b>\n\n<b>DEBUG OUTPUT:</b>\n\n<pre>" . htmlspecialchars(substr($rawContent, 0, 3000), ENT_QUOTES, 'UTF-8') . "</pre>";
+        sendMessage($chatId, $debugText, null, $replyTo);
+        return;
     }
 
-    $header = "📋 <b>API RESPONSE (JSON)</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n";
-    $footer = "\n━━━━━━━━━━━━━━━━━━━━━━━";
+    $prettyJson = json_encode($parsed, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
-    $formatted = $header . "<pre>" . htmlspecialchars($jsonText, ENT_QUOTES, 'UTF-8') . "</pre>" . $footer;
+    $maxLen = 3500;
+    if (strlen($prettyJson) > $maxLen) {
+        $prettyJson = substr($prettyJson, 0, $maxLen) . "\n\n... Result too long, trimmed.";
+    }
 
-    sendResultParts($chatId, $formatted);
+    $title = $RESULT_TITLES[$lookupType] ?? "📋 Result";
+    $msg = $title . ":\n\n<pre>" . htmlspecialchars($prettyJson, ENT_QUOTES, 'UTF-8') . "</pre>";
+
+    $keyboard = ['inline_keyboard' => [
+        [['text' => '🤫 Use Privately', 'url' => $GLOBALS['PRIVATE_BOT_LINK']]],
+        [['text' => '➕ Add me to Your Group', 'url' => $GLOBALS['GROUP_ADD_LINK']]]
+    ]];
+
+    $sent = sendMessage($chatId, $msg, $keyboard, $replyTo);
+    $sentId = $sent['result']['message_id'] ?? null;
+
+    if ($sentId) {
+        scheduleDelete($chatId, $sentId);
+    }
 }
 
 function getWelcomeKeyboard() {
-    global $BOT_USERNAME;
+    global $PRIVATE_BOT_LINK, $GROUP_ADD_LINK;
     return ['inline_keyboard' => [
-        [['text' => '➕ ADD ME TO YOUR GROUP', 'url' => "https://t.me/" . ltrim($BOT_USERNAME, '@') . "?startgroup=true"]],
-        [['text' => '🕵️ USE ME SECRETLY', 'url' => $GLOBALS['SECRET_GROUP_LINK']]]
+        [['text' => '🤫 Use Privately', 'url' => $PRIVATE_BOT_LINK]],
+        [['text' => '➕ Add me to Your Group', 'url' => $GROUP_ADD_LINK]]
     ]];
 }
 
-function handleStart($chatId, $userId, $name, $username, $isGroup = false) {
+function handleStart($chatId, $userId, $name, $username, $replyTo = null) {
     if (!checkForceJoin($userId)) {
-        sendForceJoinMessage($chatId);
+        sendForceJoinMessage($chatId, $replyTo);
         return;
     }
 
     $welcome = "🎉 <b>Welcome! You can now use me:</b>\n\nUse /help to see all available commands.";
-    sendMessage($chatId, $welcome, getWelcomeKeyboard());
+    sendMessage($chatId, $welcome, getWelcomeKeyboard(), $replyTo);
 }
 
-function handleHelp($chatId, $userId, $name) {
+function handleHelp($chatId, $userId, $replyTo = null) {
     $helpMsg = "⚡️ <b>Available Commands</b>\n\n";
-    $helpMsg .= "⚡️ /num - NUMBER TO DETAILS\n";
-    $helpMsg .= "⚡️ /aadhar - AADHAR TO INFO\n";
-    $helpMsg .= "⚡️ /tg - TELEGRAM UID TO NUMBER\n";
-    $helpMsg .= "⚡️ /rc - RC DETAILS\n";
-    $helpMsg .= "⚡️ /vehicle - VEHICLE NUMBER TO OWNER ADDRESS\n";
-    $helpMsg .= "⚡️ /family - AADHAR NUMBER TO FAMILY DETAILS\n";
-    $helpMsg .= "⚡️ /email - EMAIL TO INFO\n";
-    $helpMsg .= "⚡️ /vnum - VEHICLE TO OWNER NUM\n";
-    $helpMsg .= "⚡️ /leak - ADV OSINT SEARCH\n";
-    $helpMsg .= "⚡️ /lpg - LPG GAS INFO USING MOBILE NUMBER\n";
-    $helpMsg .= "⚡️ /mp - MP MOBILE NUM TO PIC + FAMILY INFO\n";
-    $helpMsg .= "⚡️ /challan - Challan info + challan pdf\n";
-    $helpMsg .= "⚡️ /hp - HP - LPG PIPELINE INFO THROUGH NUM\n";
-    $helpMsg .= "⚡️ /chassis - GET VEHICLE INFO FROM CHASSIS NUM\n";
-    $helpMsg .= "⚡️ /eng - GET VEHICLE INFO FROM ENGINE NUMBER\n";
-    $helpMsg .= "⚡️ /ig - INSTA ID TO BASIC DETAILS\n";
-    $helpMsg .= "⚡️ /pvtig - PVT INSTA ID FOLLOWER LOOKUP\n";
-    $helpMsg .= "⚡️ /pan - PAN INFO";
-    $keyboard = ['inline_keyboard' => [
-        [['text' => '📞 CONTACT SUPPORT', 'url' => 'https://t.me/CyberWalaBanda']]
-    ]];
-    sendMessage($chatId, $helpMsg, $keyboard);
+    $helpMsg .= "⚡️ <code>/num</code> - NUMBER TO DETAILS\n";
+    $helpMsg .= "⚡️ <code>/aadhar</code> - AADHAR TO INFO\n";
+    $helpMsg .= "⚡️ <code>/tg</code> - TELEGRAM UID TO NUMBER\n";
+    $helpMsg .= "⚡️ <code>/rc</code> - RC DETAILS\n";
+    $helpMsg .= "⚡️ <code>/vehicle</code> - VEHICLE DETAILS\n";
+    $helpMsg .= "⚡️ <code>/family</code> - FAMILY DETAILS\n";
+    $helpMsg .= "⚡️ <code>/vnum</code> - VEHICLE TO OWNER NUM\n";
+    $helpMsg .= "⚡️ <code>/lpg</code> - LPG INFO\n";
+    $helpMsg .= "⚡️ <code>/challan</code> - CHALLAN INFO\n";
+    $helpMsg .= "⚡️ <code>/chassis</code> - CHASSIS INFO\n";
+    $helpMsg .= "⚡️ <code>/engine</code> - ENGINE INFO\n";
+    $helpMsg .= "⚡️ <code>/insta</code> - INSTAGRAM INFO\n";
+    $helpMsg .= "⚡️ <code>/pan</code> - PAN INFO\n";
+    $helpMsg .= "⚡️ <code>/gst</code> - GST INFO\n";
+    $helpMsg .= "⚡️ <code>/pangst</code> - PAN TO GST INFO\n";
+    $helpMsg .= "⚡️ <code>/ip</code> - IP ADDRESS LOOKUP\n";
+    $helpMsg .= "⚡️ <code>/pincode</code> - PINCODE INFO\n";
+    $helpMsg .= "⚡️ <code>/ifsc</code> - IFSC CODE INFO\n";
+    $helpMsg .= "⚡️ <code>/ff</code> - FREE FIRE UID INFO\n";
+    $helpMsg .= "⚡️ <code>/paytm</code> - PAYTM UPI INFO\n";
+    $helpMsg .= "⚡️ <code>/ration</code> - RATION CARD INFO\n";
+    $helpMsg .= "⚡️ <code>/mob2veh</code> - MOBILE TO VEHICLE NUM";
+
+    sendMessage($chatId, $helpMsg, null, $replyTo);
 }
 
 function handleCallback($callbackQuery) {
@@ -288,7 +366,7 @@ function handleCallback($callbackQuery) {
             $welcome = "🎉 <b>Welcome! You can now use me:</b>\n\nUse /help to see all available commands.";
             sendMessage($chatId, $welcome, getWelcomeKeyboard());
         } else {
-            answerCallbackQuery($callbackId, '❌ Please join channel & group first!', true);
+            answerCallbackQuery($callbackId, '❌ Please join all channels first!', true);
         }
         return;
     }
@@ -302,8 +380,7 @@ function handleCommand($message) {
     $name = $message['from']['first_name'] ?? 'User';
     $username = $message['from']['username'] ?? 'No Username';
     $text = $message['text'] ?? '';
-    $chatType = $message['chat']['type'] ?? 'private';
-    $isGroup = in_array($chatType, ['group', 'supergroup']);
+    $messageId = $message['message_id'] ?? null;
 
     $parts = explode(' ', $text);
     $command = strtolower($parts[0]);
@@ -312,122 +389,115 @@ function handleCommand($message) {
     }
     $args = array_slice($parts, 1);
 
-    $forceJoinCommands = ['/start', '/help', '/num', '/aadhar', '/family', '/ration', '/lpg', '/paytm', '/pan', '/gst', '/pangst', '/vehicle', '/vnum', '/mob2veh', '/challan', '/chassis', '/engine', '/ip', '/pincode', '/tg', '/insta', '/ifsc', '/ff'];
-
-    if (in_array($command, $forceJoinCommands)) {
-        if (!checkForceJoin($userId)) {
-            sendForceJoinMessage($chatId);
-            return;
-        }
-    }
-
     switch ($command) {
         case '/start':
-            handleStart($chatId, $userId, $name, $username, $isGroup);
+            handleStart($chatId, $userId, $name, $username, $messageId);
             break;
         case '/help':
-            handleHelp($chatId, $userId, $name);
+            if (!checkForceJoin($userId)) {
+                sendForceJoinMessage($chatId, $messageId);
+                return;
+            }
+            handleHelp($chatId, $userId, $messageId);
             break;
         case '/num':
-            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/num 9876543210</code>"); return; }
-            processLookupRequest($chatId, $userId, 'mobile', $args[0], $isGroup);
+            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/num 9876543210</code>", null, $messageId); return; }
+            processLookupRequest($chatId, $userId, 'mobile', $args[0], $messageId);
             break;
         case '/aadhar':
-            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/aadhar 123456789012</code>"); return; }
-            processLookupRequest($chatId, $userId, 'aadhaar', $args[0], $isGroup);
+            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/aadhar 123456789012</code>", null, $messageId); return; }
+            processLookupRequest($chatId, $userId, 'aadhaar', $args[0], $messageId);
             break;
         case '/family':
-            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/family 123456789012</code>"); return; }
-            processLookupRequest($chatId, $userId, 'family', $args[0], $isGroup);
-            break;
-        case '/lpg':
-            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/lpg 1234567890</code>"); return; }
-            processLookupRequest($chatId, $userId, 'lpg', $args[0], $isGroup);
-            break;
-        case '/paytm':
-            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/paytm example@ptyes</code>"); return; }
-            processLookupRequest($chatId, $userId, 'paytm', $args[0], $isGroup);
-            break;
-        case '/pan':
-            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/pan ABCDE1234F</code>"); return; }
-            processLookupRequest($chatId, $userId, 'pan', $args[0], $isGroup);
-            break;
-        case '/gst':
-            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/gst 22AAAAA0000A1Z5</code>"); return; }
-            processLookupRequest($chatId, $userId, 'gst', $args[0], $isGroup);
-            break;
-        case '/pangst':
-            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/pangst ABCDE1234F</code>"); return; }
-            processLookupRequest($chatId, $userId, 'pangst', $args[0], $isGroup);
-            break;
-        case '/vehicle':
-            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/vehicle MH01AB1234</code>"); return; }
-            processLookupRequest($chatId, $userId, 'vehicle', $args[0], $isGroup);
-            break;
-        case '/vnum':
-            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/vnum MH01AB1234</code>"); return; }
-            processLookupRequest($chatId, $userId, 'vnum', $args[0], $isGroup);
-            break;
-        case '/mob2veh':
-            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/mob2veh 9876543210</code>"); return; }
-            processLookupRequest($chatId, $userId, 'mob2veh', $args[0], $isGroup);
-            break;
-        case '/challan':
-            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/challan MH01AB1234</code>"); return; }
-            processLookupRequest($chatId, $userId, 'challan', $args[0], $isGroup);
-            break;
-        case '/chassis':
-            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/chassis ABC1234567890</code>"); return; }
-            processLookupRequest($chatId, $userId, 'chassis', $args[0], $isGroup);
-            break;
-        case '/engine':
-            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/engine ABC1234567890</code>"); return; }
-            processLookupRequest($chatId, $userId, 'engine', $args[0], $isGroup);
-            break;
-        case '/ip':
-            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/ip 192.168.1.1</code>"); return; }
-            processLookupRequest($chatId, $userId, 'ip', $args[0], $isGroup);
-            break;
-        case '/pincode':
-            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/pincode 400001</code>"); return; }
-            processLookupRequest($chatId, $userId, 'pincode', $args[0], $isGroup);
-            break;
-        case '/tg':
-            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/tg 9876543210</code>"); return; }
-            processLookupRequest($chatId, $userId, 'telegram', $args[0], $isGroup);
-            break;
-        case '/insta':
-        case '/ig':
-            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/ig username</code>"); return; }
-            processLookupRequest($chatId, $userId, 'instagram', $args[0], $isGroup);
-            break;
-        case '/ifsc':
-            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/ifsc SBIN0001234</code>"); return; }
-            processLookupRequest($chatId, $userId, 'ifsc', $args[0], $isGroup);
-            break;
-        case '/ff':
-            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/ff 1234567890</code>"); return; }
-            processLookupRequest($chatId, $userId, 'freefire', $args[0], $isGroup);
-            break;
-        case '/rc':
-            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/rc MH01AB1234</code>"); return; }
-            processLookupRequest($chatId, $userId, 'vehicle', $args[0], $isGroup);
+            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/family 123456789012</code>", null, $messageId); return; }
+            processLookupRequest($chatId, $userId, 'family', $args[0], $messageId);
             break;
         case '/ration':
-            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/ration 123456789012</code>"); return; }
-            processLookupRequest($chatId, $userId, 'ration', $args[0], $isGroup);
+            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/ration 123456789012</code>", null, $messageId); return; }
+            processLookupRequest($chatId, $userId, 'ration', $args[0], $messageId);
+            break;
+        case '/lpg':
+            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/lpg 1234567890</code>", null, $messageId); return; }
+            processLookupRequest($chatId, $userId, 'lpg', $args[0], $messageId);
+            break;
+        case '/paytm':
+            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/paytm example@ptyes</code>", null, $messageId); return; }
+            processLookupRequest($chatId, $userId, 'paytm', $args[0], $messageId);
+            break;
+        case '/pan':
+            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/pan ABCDE1234F</code>", null, $messageId); return; }
+            processLookupRequest($chatId, $userId, 'pan', $args[0], $messageId);
+            break;
+        case '/gst':
+            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/gst 22AAAAA0000A1Z5</code>", null, $messageId); return; }
+            processLookupRequest($chatId, $userId, 'gst', $args[0], $messageId);
+            break;
+        case '/pangst':
+            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/pangst ABCDE1234F</code>", null, $messageId); return; }
+            processLookupRequest($chatId, $userId, 'pangst', $args[0], $messageId);
+            break;
+        case '/vehicle':
+        case '/rc':
+            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/vehicle MH01AB1234</code>", null, $messageId); return; }
+            processLookupRequest($chatId, $userId, 'vehicle', $args[0], $messageId);
+            break;
+        case '/vnum':
+            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/vnum MH01AB1234</code>", null, $messageId); return; }
+            processLookupRequest($chatId, $userId, 'vnum', $args[0], $messageId);
+            break;
+        case '/mob2veh':
+            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/mob2veh 9876543210</code>", null, $messageId); return; }
+            processLookupRequest($chatId, $userId, 'mob2veh', $args[0], $messageId);
+            break;
+        case '/challan':
+            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/challan MH01AB1234</code>", null, $messageId); return; }
+            processLookupRequest($chatId, $userId, 'challan', $args[0], $messageId);
+            break;
+        case '/chassis':
+            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/chassis ABC1234567890</code>", null, $messageId); return; }
+            processLookupRequest($chatId, $userId, 'chassis', $args[0], $messageId);
+            break;
+        case '/engine':
+            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/engine ABC1234567890</code>", null, $messageId); return; }
+            processLookupRequest($chatId, $userId, 'engine', $args[0], $messageId);
+            break;
+        case '/ip':
+            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/ip 192.168.1.1</code>", null, $messageId); return; }
+            processLookupRequest($chatId, $userId, 'ip', $args[0], $messageId);
+            break;
+        case '/pincode':
+            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/pincode 400001</code>", null, $messageId); return; }
+            processLookupRequest($chatId, $userId, 'pincode', $args[0], $messageId);
+            break;
+        case '/tg':
+            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/tg 9876543210</code>", null, $messageId); return; }
+            processLookupRequest($chatId, $userId, 'telegram', $args[0], $messageId);
+            break;
+        case '/insta':
+            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/insta username</code>", null, $messageId); return; }
+            processLookupRequest($chatId, $userId, 'instagram', $args[0], $messageId);
+            break;
+        case '/ifsc':
+            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/ifsc SBIN0001234</code>", null, $messageId); return; }
+            processLookupRequest($chatId, $userId, 'ifsc', $args[0], $messageId);
+            break;
+        case '/ff':
+            if (empty($args)) { sendMessage($chatId, "❌ Format: <code>/ff 1234567890</code>", null, $messageId); return; }
+            processLookupRequest($chatId, $userId, 'freefire', $args[0], $messageId);
             break;
         default:
             if (strpos($text, '/') === 0) {
                 if (!checkForceJoin($userId)) {
-                    sendForceJoinMessage($chatId);
+                    sendForceJoinMessage($chatId, $messageId);
                     return;
                 }
-                sendMessage($chatId, "❓ Unknown command. Use /help to see available commands.");
+                sendMessage($chatId, "❓ Unknown command. Use /help to see available commands.", null, $messageId);
             }
             break;
     }
 }
+
+processPendingDeletes();
 
 $input = file_get_contents('php://input');
 $update = json_decode($input, true);
