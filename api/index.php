@@ -236,8 +236,6 @@ function processPendingDeletes() {
     foreach ($queue as $item) {
         if ($item['time'] <= $now) {
             editMessageText($item['chat_id'], $item['message_id'], "🗑️ Message Deleted Successfully");
-            usleep(200000);
-            deleteMessage($item['chat_id'], $item['message_id']);
         } else {
             $remaining[] = $item;
         }
